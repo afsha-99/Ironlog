@@ -25,6 +25,8 @@ Gym Tracker Web App — läuft direkt im iPhone Browser ohne Installation.
 ## 💾 Daten
 
 - Daten werden in `localStorage` gespeichert (bleibt erhalten)
+- Neue Nutzer starten mit einer vorgefüllten Exercise-Liste
+- Nutzer können diese Exercises in der App löschen, bearbeiten oder eigene hinzufügen
 - Backup: In der App → Backup Tab → **"Download Backup File"**
 - Restore: Backup-Datei laden wenn nötig
 
