@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
@@ -411,24 +411,30 @@ function ConfirmDialog({ confirm, onCancel, onConfirm }) {
 // ═══════════════════════════════════════════════════════════════
 // DEVICE FORM
 // ═══════════════════════════════════════════════════════════════
-function DeviceForm({ initial, onSave, onCancel }) {
+function DeviceForm({ initial, onSave, onCancel, language = "en" }) {
   const [name, setName] = useState(initial?.name||"");
   const [muscle, setMuscle] = useState(initial?.muscle||"");
+  const [exerciseType, setExerciseType] = useState(initial?.exerciseType||"complement");
   const [photo, setPhoto] = useState(initial?.photo||null);
   const [fn, setFn] = useState(false); const [fm, setFm] = useState(false);
-  const save = () => { if (!name.trim()) return; onSave({name:name.trim(),muscle:muscle.trim(),photo}); };
+  const save = () => { if (!name.trim()) return; onSave({name:name.trim(),muscle:muscle.trim(),exerciseType,photo}); };
   return (
     <div style={S.form}>
-      <label style={S.lbl}>Machine Name</label>
+      <label style={S.lbl}>{t(language,"exerciseName")}</label>
       <input style={{...inp,borderColor:fn?"#3b82f6":"#475569",boxShadow:fn?"0 0 0 3px rgba(59,130,246,0.2)":"none"}}
-        placeholder="e.g. Chest Press, Lat Pulldown…" value={name}
+        placeholder={language==="de"?"z.B. Brustpresse, Latzug":"e.g. Chest Press, Lat Pulldown"} value={name}
         onChange={e=>setName(e.target.value)} onFocus={()=>setFn(true)} onBlur={()=>setFn(false)} autoFocus />
-      <label style={S.lbl}>Muscle Group</label>
+      <label style={S.lbl}>{t(language,"muscleGroup")}</label>
       <input style={{...inp,borderColor:fm?"#3b82f6":"#475569",boxShadow:fm?"0 0 0 3px rgba(59,130,246,0.2)":"none"}}
-        placeholder="e.g. Chest, Back, Legs…" value={muscle}
+        placeholder={language==="de"?"z.B. Brust, Rücken, Beine":"e.g. Chest, Back, Legs"} value={muscle}
         onChange={e=>setMuscle(e.target.value)} onFocus={()=>setFm(true)} onBlur={()=>setFm(false)} />
-      <label style={S.lbl}>Photo</label>
-      <PhotoPicker onPhoto={setPhoto} label={photo?"Change Photo":"Add Photo"} />
+      <label style={S.lbl}>{t(language,"exerciseType")}</label>
+      <select style={inp} value={exerciseType} onChange={e=>setExerciseType(e.target.value)}>
+        <option value="basic">{t(language,"basic")}</option>
+        <option value="complement">{t(language,"complement")}</option>
+      </select>
+      <label style={S.lbl}>{t(language,"photo")}</label>
+      <PhotoPicker onPhoto={setPhoto} label={photo?t(language,"changePhoto"):t(language,"addPhoto")} />
       {photo && <div style={{position:"relative",marginTop:4}}>
         <img src={photo} alt="preview" style={{borderRadius:10,maxHeight:130,objectFit:"cover",width:"100%"}} />
         <button style={{position:"absolute",top:6,right:6,background:"rgba(0,0,0,0.7)",
@@ -436,8 +442,8 @@ function DeviceForm({ initial, onSave, onCancel }) {
           onClick={()=>setPhoto(null)}>✕</button>
       </div>}
       <div style={{display:"flex",gap:8,marginTop:6}}>
-        <button style={S.btnSec} onClick={onCancel}>No</button>
-        <button style={S.btnPri} onClick={save}>{initial?"Save Changes":"Save Device"}</button>
+        <button style={S.btnSec} onClick={onCancel}>{t(language,"no")}</button>
+        <button style={S.btnPri} onClick={save}>{initial?t(language,"saveChanges"):t(language,"saveExercise")}</button>
       </div>
     </div>
   );
@@ -446,18 +452,18 @@ function DeviceForm({ initial, onSave, onCancel }) {
 // ═══════════════════════════════════════════════════════════════
 // LAST LOGS (shown inside session)
 // ═══════════════════════════════════════════════════════════════
-function LastLogs({ logs, deviceId, dayName }) {
+function LastLogs({ logs, deviceId, dayName, language = "en" }) {
   const sameDay = [...logs].filter(l=>l.deviceId===deviceId&&l.dayName===dayName)
     .sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
   const any = [...logs].filter(l=>l.deviceId===deviceId)
     .sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
   const show = sameDay || any;
-  if (!show) return <div style={{color:"#64748b",fontSize:13,padding:"8px 0"}}>No previous log for this exercise.</div>;
+  if (!show) return <div style={{color:"#64748b",fontSize:13,padding:"8px 0"}}>{language==="de"?"Kein früherer Log für diese Übung.":"No previous log for this exercise."}</div>;
   return (
     <div style={{background:"#0f172a",borderRadius:10,padding:"10px 12px",margin:"10px 0"}}>
-      <div style={{color:"#64748b",fontSize:12,marginBottom:6}}>Last: {show.dayName} · {formatDate(show.date)}</div>
+      <div style={{color:"#64748b",fontSize:12,marginBottom:6}}>{language==="de"?"Letzter":"Last"}: {displayDayName(show.dayName, language)} · {formatDate(show.date)}</div>
       <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-        {show.sets.map((s,i)=><span key={i} style={S.pill}>Set {i+1}: {s.weight}kg × {s.reps}</span>)}
+        {show.sets.map((s,i)=><span key={i} style={S.pill}>{language==="de"?"Satz":"Set"} {i+1}: {s.weight}kg × {s.reps}</span>)}
       </div>
     </div>
   );
@@ -465,52 +471,166 @@ function LastLogs({ logs, deviceId, dayName }) {
 
 const DEFAULT_DAYS = ["Push Day","Pull Day","Leg Day","Whole Body","Chest","Arms","Shoulders","Back"];
 
+const I18N = {
+  en: {
+    startGymDay:"Start Gym Day", clearCustom:"Clear custom", trainingDate:"Training Date", chooseTrainingDay:"Choose Training Day",
+    newDayName:"New Day Name", editDayName:"Edit Day Name", addNewDay:"Add New Day", start:"Start", default:"DEFAULT",
+    exerciseName:"Exercise Name", muscleGroup:"Muscle Group", exerciseType:"Exercise Type", photo:"Photo", changePhoto:"Change Photo", addPhoto:"Add Photo",
+    no:"No", yes:"Yes", saveChanges:"Save Changes", saveExercise:"Save Exercise", basic:"Basic", complement:"Complement",
+    chooseFirstExercise:"Choose first exercise", addNextExercise:"Add next exercise", firstChooseGroup:"First choose a muscle group, then choose the exercise.",
+    backToGroups:"Back to muscle groups", noExercises:"No exercises yet. Add your first one below.", noTagged:"No exercises tagged for this day yet.",
+    addNewExercise:"Add new exercise", finishWorkout:"Finish Workout", endBack:"End / Back", savedToday:"Saved today",
+    finishExercise:"Finish this exercise?", saveLogNext:"Save this log and move to the next exercise?", yesSave:"Yes, save",
+    saveChangesQuestion:"Save changes?", updateExerciseLog:"Do you want to update this exercise log?", logSets:"Log sets", editSets:"Edit sets",
+    addNextSet:"Add Next Set", saveNextExercise:"Save + Next Exercise", updateExercise:"Update Exercise",
+    restOver:"Rest time is over", setRestOver:"Set rest is over. Ready for the next set.", exerciseRestOver:"Exercise rest is over. Ready for the next exercise.",
+    restRunning:"Rest time is still running", setRest:"Set rest", exerciseRest:"Exercise rest", restRunningMessage:"is still running", recoveryMessage:"Take a little more recovery before continuing.",
+    volumeReached:"Sufficient training volume reached", volumeMessage:"You have reached sufficient training volume for", continueStrong:"You can press OK and continue if you still feel strong.",
+    exercises:"Exercises", deleteAll:"Delete all", groupPhoto:"Group photo", photoForGroup:"Photo for this group", changeGroupPhoto:"Change Group Photo", addGroupPhoto:"Add Group Photo",
+    removeGroupPhoto:"Remove group photo", noExercisesGroup:"No exercises in this group.", exercisesGrouped:"Your exercises are grouped by muscle group, so long lists stay easy to navigate.",
+    history:"History", days:"Days", settings:"Settings", noSessionsExercise:"No sessions logged yet for this exercise.", noSavedSessions:"No saved sessions yet.",
+    editTrainingDay:"Edit training day", addExerciseToDay:"Add exercise to this day", noMuscleGroup:"No muscle group",
+    language:"Language", english:"English", german:"German", restTimerSettings:"Rest Timer Settings", restBetweenSets:"Rest between sets (minutes)",
+    restBetweenExercises:"Rest between exercises (minutes)", saveTimerSettings:"Save timer settings", timerSaved:"Timer settings saved",
+    exportBackup:"Export Backup", downloadBackup:"Download Backup", restoreFile:"Restore from File", restorePaste:"Restore from Paste",
+    chooseBackupFile:"Choose Backup File", restoreText:"Restore from Text", clearAllData:"Clear All Data", allDataCleared:"All data cleared.",
+    settingsBackupText:"Download all your exercises, photos, days and logs as a .json file. Save it to iCloud Drive / Files for safety.",
+    pleaseChoose:"Please choose an exercise first.", pleaseSet:"Please enter at least one valid set with weight and reps.",
+    deleteExercisesConfirm:"Are you sure you want to delete all exercises? This cannot be undone.",
+    deleteDaysConfirm:"Are you sure you want to delete all saved day names? This cannot be undone.",
+    deleteHistoryConfirm:"Are you sure you want to delete all history logs? This cannot be undone."
+  },
+  de: {
+    startGymDay:"Training starten", clearCustom:"Eigene löschen", trainingDate:"Trainingsdatum", chooseTrainingDay:"Trainingstag wählen",
+    newDayName:"Neuer Tagesname", editDayName:"Tagesname bearbeiten", addNewDay:"Neuen Tag hinzufügen", start:"Starten", default:"STANDARD",
+    exerciseName:"Übungsname", muscleGroup:"Muskelgruppe", exerciseType:"Übungstyp", photo:"Foto", changePhoto:"Foto ändern", addPhoto:"Foto hinzufügen",
+    no:"Nein", yes:"Ja", saveChanges:"Änderungen speichern", saveExercise:"Übung speichern", basic:"Grundübung", complement:"Ergänzungsübung",
+    chooseFirstExercise:"Erste Übung wählen", addNextExercise:"Nächste Übung hinzufügen", firstChooseGroup:"Wähle zuerst eine Muskelgruppe, dann die Übung.",
+    backToGroups:"Zurück zu Muskelgruppen", noExercises:"Noch keine Übungen. Füge unten deine erste hinzu.", noTagged:"Für diesen Tag sind noch keine Übungen zugeordnet.",
+    addNewExercise:"Neue Übung hinzufügen", finishWorkout:"Workout beenden", endBack:"Beenden / Zurück", savedToday:"Heute gespeichert",
+    finishExercise:"Diese Übung abschließen?", saveLogNext:"Diesen Log speichern und zur nächsten Übung gehen?", yesSave:"Ja, speichern",
+    saveChangesQuestion:"Änderungen speichern?", updateExerciseLog:"Möchtest du diesen Übungslog aktualisieren?", logSets:"Sätze eintragen", editSets:"Sätze bearbeiten",
+    addNextSet:"Nächsten Satz hinzufügen", saveNextExercise:"Speichern + nächste Übung", updateExercise:"Übung aktualisieren",
+    restOver:"Pause ist vorbei", setRestOver:"Satzpause ist vorbei. Bereit für den nächsten Satz.", exerciseRestOver:"Übungspause ist vorbei. Bereit für die nächste Übung.",
+    restRunning:"Pause läuft noch", setRest:"Satzpause", exerciseRest:"Übungspause", restRunningMessage:"läuft noch", recoveryMessage:"Nimm dir noch etwas Erholung, bevor du weitermachst.",
+    volumeReached:"Ausreichendes Trainingsvolumen erreicht", volumeMessage:"Du hast ausreichend Trainingsvolumen erreicht für", continueStrong:"Du kannst OK drücken und weitermachen, wenn du dich noch stark fühlst.",
+    exercises:"Übungen", deleteAll:"Alle löschen", groupPhoto:"Gruppenfoto", photoForGroup:"Foto für diese Gruppe", changeGroupPhoto:"Gruppenfoto ändern", addGroupPhoto:"Gruppenfoto hinzufügen",
+    removeGroupPhoto:"Gruppenfoto entfernen", noExercisesGroup:"Keine Übungen in dieser Gruppe.", exercisesGrouped:"Deine Übungen sind nach Muskelgruppen sortiert, damit lange Listen übersichtlich bleiben.",
+    history:"Verlauf", days:"Tage", settings:"Einstellungen", noSessionsExercise:"Für diese Übung gibt es noch keine Sessions.", noSavedSessions:"Noch keine gespeicherten Sessions.",
+    editTrainingDay:"Trainingstag bearbeiten", addExerciseToDay:"Übung zu diesem Tag hinzufügen", noMuscleGroup:"Keine Muskelgruppe",
+    language:"Sprache", english:"Englisch", german:"Deutsch", restTimerSettings:"Pausen-Timer", restBetweenSets:"Pause zwischen Sätzen (Minuten)",
+    restBetweenExercises:"Pause zwischen Übungen (Minuten)", saveTimerSettings:"Timer speichern", timerSaved:"Timer gespeichert",
+    exportBackup:"Backup exportieren", downloadBackup:"Backup herunterladen", restoreFile:"Aus Datei wiederherstellen", restorePaste:"Aus Text wiederherstellen",
+    chooseBackupFile:"Backup-Datei wählen", restoreText:"Aus Text wiederherstellen", clearAllData:"Alle Daten löschen", allDataCleared:"Alle Daten gelöscht.",
+    settingsBackupText:"Lade Übungen, Fotos, Tage und Logs als .json Datei herunter. Speichere sie sicher in iCloud Drive / Dateien.",
+    pleaseChoose:"Bitte wähle zuerst eine Übung.", pleaseSet:"Bitte trage mindestens einen gültigen Satz mit Gewicht und Wiederholungen ein.",
+    deleteExercisesConfirm:"Möchtest du wirklich alle Übungen löschen? Das kann nicht rückgängig gemacht werden.",
+    deleteDaysConfirm:"Möchtest du wirklich alle gespeicherten Tagesnamen löschen? Das kann nicht rückgängig gemacht werden.",
+    deleteHistoryConfirm:"Möchtest du wirklich den gesamten Verlauf löschen? Das kann nicht rückgängig gemacht werden."
+  }
+};
+
+const t = (language, key) => I18N[language]?.[key] || I18N.en[key] || key;
+
+const DEFAULT_DAY_LABELS = {
+  de: {"Push Day":"Push-Tag","Pull Day":"Pull-Tag","Leg Day":"Bein-Tag","Whole Body":"Ganzkörper","Chest":"Brust","Arms":"Arme","Shoulders":"Schultern","Back":"Rücken"}
+};
+
+function displayDayName(name, language) {
+  return DEFAULT_DAY_LABELS[language]?.[name] || name;
+}
+
 const DEFAULT_GROUP_PHOTOS = {
+  [groupKey("Chest")]: "images/exercises/brustbankmachine.png",
   [groupKey("Brust")]: "images/exercises/brustbankmachine.png",
+  [groupKey("Triceps")]: "images/exercises/Trizeps_seil_unten.png",
   [groupKey("Trizeps")]: "images/exercises/Trizeps_seil_unten.png",
-  [groupKey("Schulter")]: "images/exercises/Schulterpresse_machine.png",
+  [groupKey("Shoulders")]: "images/exercises/Schulterpresse_machine.png",
+  [groupKey("Schultern")]: "images/exercises/Schulterpresse_machine.png",
+  [groupKey("Back")]: "images/exercises/Latzug_kabel.png",
   [groupKey("Rücken")]: "images/exercises/Latzug_kabel.png",
+  [groupKey("Biceps")]: "images/exercises/bizeps_machine.png",
   [groupKey("Bizeps")]: "images/exercises/bizeps_machine.png",
 };
 
+function exerciseTypeLabel(type, language = "en") {
+  return type === "basic" ? t(language, "basic") : t(language, "complement");
+}
+
 const DEFAULT_DEVICES = [
-  { id:"default-brustbankdruecken-lh", name:"Brustbankdruecken LH", muscle:"Brust", photo:"images/exercises/brustbankdruecken-lh.jpg", days:["Push Day","Whole Body","Chest"] },
-  { id:"default-brustdruecken-machine", name:"Brustdruecken Machine", muscle:"Brust", photo:"images/exercises/brustbankmachine.png", days:["Push Day","Whole Body","Chest"] },
-  { id:"default-brustschraegbankdruecken-lh", name:"Brustschraegbankdruecken LH", muscle:"Brust", photo:"images/exercises/brustschraegbankdruecken-lh.jpg", days:["Push Day","Whole Body","Chest"] },
-  { id:"default-trizeps-seil", name:"Trizeps Seil", muscle:"Trizeps", photo:"images/exercises/Trizeps_seil_unten.png", days:["Push Day","Whole Body","Arms"] },
-  { id:"default-trizeps-dip-machine", name:"Trizeps dip Machine", muscle:"Trizeps", photo:"images/exercises/trizeps_dipmachine.png", days:["Push Day","Whole Body","Arms"] },
-  { id:"default-flymachine", name:"Flymachine", muscle:"Brust", photo:"images/exercises/fly.png", days:["Push Day","Whole Body","Chest"] },
-  { id:"default-schulterpresse-kh", name:"Schulterpresse KH", muscle:"Schulter", photo:"images/exercises/Schulterpresse_kh.png", days:["Push Day","Whole Body","Shoulders"] },
-  { id:"default-schulterpresse-machine", name:"Schulterpresse Machine", muscle:"Schulter", photo:"images/exercises/Schulterpresse_machine.png", days:["Push Day","Whole Body","Shoulders"] },
-  { id:"default-seitenheben-kh-1", name:"Seitenheben kh", muscle:"Schulter", photo:"images/exercises/seitenheben_kh.png", days:["Push Day","Whole Body","Arms","Shoulders"] },
-  { id:"default-seitenheben-kh-2", name:"Seitenheben Machine", muscle:"Schulter", photo:"images/exercises/seitenheben_machine.png", days:["Push Day","Whole Body","Arms","Shoulders"] },
-  { id:"default-schulterdruecken-vorne-kh", name:"Schulterdruecken vorne kh", muscle:"Schulter", photo:"images/exercises/schulterheben_vorne.png", days:["Push Day","Whole Body","Arms","Shoulders"] },
-  { id:"default-trizeps-kh", name:"Trizeps kh", muscle:"Trizeps", photo:"images/exercises/trizeps_kh.png", days:["Push Day","Whole Body","Arms"] },
-  { id:"default-latzug-kabel", name:"Latzug Kabel", muscle:"Rücken", photo:"images/exercises/Latzug_kabel.png", days:["Pull Day","Whole Body","Back"] },
-  { id:"default-rudern-kabelzug", name:"Rudern Kabelzug", muscle:"Rücken", photo:"images/exercises/rudern_kabelzug.png", days:["Pull Day","Whole Body","Back"] },
-  { id:"default-rudern-machine", name:"Rudern Machine", muscle:"Rücken", photo:"images/exercises/rudern_machine.png", days:["Pull Day","Whole Body","Back"] },
-  { id:"default-schrags", name:"Schrags", muscle:"Rücken", photo:"images/exercises/Shrags_kh.png", days:["Pull Day","Whole Body","Back"] },
-  { id:"default-fly-reverse", name:"Fly Reverse", muscle:"Rücken", photo:"images/exercises/fly_reverse.png", days:["Pull Day","Whole Body","Back"] },
-  { id:"default-tbar-geraet", name:"Tbar Gerät", muscle:"Rücken", photo:"images/exercises/tbar_machine.png", days:["Pull Day","Whole Body","Back"] },
-  { id:"default-rudern-kh", name:"Rudern KH", muscle:"Rücken", photo:"images/exercises/Rudern_kh.png", days:["Pull Day","Whole Body","Back"] },
-  { id:"default-pullover-seil-kabel", name:"Pullover Seil Kabel", muscle:"Rücken", photo:"images/exercises/pullover.png", days:["Pull Day","Whole Body","Back"] },
-  { id:"default-bizeps-kh", name:"Bizeps KH", muscle:"Bizeps", photo:"images/exercises/bizeps_kh.png", days:["Pull Day","Whole Body","Arms"] },
-  { id:"default-bizeps-hammerkurl-kh", name:"Bizeps Hammerkurl KH", muscle:"Bizeps", photo:"images/exercises/bizeps_hammer_kh.png", days:["Pull Day","Whole Body","Arms"] },
-  { id:"default-bizeps-hammerkurl-seil", name:"Bizeps Hammerkurl Seil", muscle:"Bizeps", photo:"images/exercises/bizeps_kabel_hammer.png", days:["Pull Day","Whole Body","Arms"] },
-  { id:"default-bizeps-machine", name:"Bizeps Machine", muscle:"Bizeps", photo:"images/exercises/bizeps_machine.png", days:["Pull Day","Whole Body","Arms"] },
-  { id:"default-bizeps-machine-ez", name:"Bizeps Machine EZ", muscle:"Bizeps", photo:"images/exercises/bizeps_ez_machine.png", days:["Pull Day","Whole Body","Arms"] },
+  { id:"default-brustbankdruecken-lh", name:"Barbell Bench Press", muscle:"Chest", exerciseType:"basic", photo:"images/exercises/brustbankdruecken-lh.jpg", days:["Push Day","Whole Body","Chest"] },
+  { id:"default-brustdruecken-machine", name:"Machine Chest Press", muscle:"Chest", exerciseType:"basic", photo:"images/exercises/brustbankmachine.png", days:["Push Day","Whole Body","Chest"] },
+  { id:"default-brustschraegbankdruecken-lh", name:"Incline Barbell Bench Press", muscle:"Chest", exerciseType:"basic", photo:"images/exercises/brustschraegbankdruecken-lh.jpg", days:["Push Day","Whole Body","Chest"] },
+  { id:"default-trizeps-seil", name:"Cable Triceps Pushdown", muscle:"Triceps", exerciseType:"complement", photo:"images/exercises/Trizeps_seil_unten.png", days:["Push Day","Whole Body","Arms"] },
+  { id:"default-trizeps-dip-machine", name:"Machine Triceps Dip", muscle:"Triceps", exerciseType:"basic", photo:"images/exercises/trizeps_dipmachine.png", days:["Push Day","Whole Body","Arms"] },
+  { id:"default-flymachine", name:"Pec Deck Fly", muscle:"Chest", exerciseType:"complement", photo:"images/exercises/fly.png", days:["Push Day","Whole Body","Chest"] },
+  { id:"default-schulterpresse-kh", name:"Dumbbell Shoulder Press", muscle:"Shoulders", exerciseType:"basic", photo:"images/exercises/Schulterpresse_kh.png", days:["Push Day","Whole Body","Shoulders"] },
+  { id:"default-schulterpresse-machine", name:"Machine Shoulder Press", muscle:"Shoulders", exerciseType:"basic", photo:"images/exercises/Schulterpresse_machine.png", days:["Push Day","Whole Body","Shoulders"] },
+  { id:"default-seitenheben-kh-1", name:"Dumbbell Lateral Raise", muscle:"Shoulders", exerciseType:"complement", photo:"images/exercises/seitenheben_kh.png", days:["Push Day","Whole Body","Arms","Shoulders"] },
+  { id:"default-seitenheben-kh-2", name:"Machine Lateral Raise", muscle:"Shoulders", exerciseType:"complement", photo:"images/exercises/seitenheben_machine.png", days:["Push Day","Whole Body","Arms","Shoulders"] },
+  { id:"default-schulterdruecken-vorne-kh", name:"Front Dumbbell Shoulder Press", muscle:"Shoulders", exerciseType:"complement", photo:"images/exercises/schulterheben_vorne.png", days:["Push Day","Whole Body","Arms","Shoulders"] },
+  { id:"default-trizeps-kh", name:"Dumbbell Triceps Extension", muscle:"Triceps", exerciseType:"complement", photo:"images/exercises/trizeps_kh.png", days:["Push Day","Whole Body","Arms"] },
+  { id:"default-latzug-kabel", name:"Cable Lat Pulldown", muscle:"Back", exerciseType:"basic", photo:"images/exercises/Latzug_kabel.png", days:["Pull Day","Whole Body","Back"] },
+  { id:"default-rudern-kabelzug", name:"Cable Row", muscle:"Back", exerciseType:"basic", photo:"images/exercises/rudern_kabelzug.png", days:["Pull Day","Whole Body","Back"] },
+  { id:"default-rudern-machine", name:"Machine Row", muscle:"Back", exerciseType:"basic", photo:"images/exercises/rudern_machine.png", days:["Pull Day","Whole Body","Back"] },
+  { id:"default-schrags", name:"Dumbbell Shrugs", muscle:"Back", exerciseType:"complement", photo:"images/exercises/Shrags_kh.png", days:["Pull Day","Whole Body","Back"] },
+  { id:"default-fly-reverse", name:"Reverse Pec Deck Fly", muscle:"Back", exerciseType:"complement", photo:"images/exercises/fly_reverse.png", days:["Pull Day","Whole Body","Back"] },
+  { id:"default-tbar-geraet", name:"Machine T-Bar Row", muscle:"Back", exerciseType:"basic", photo:"images/exercises/tbar_machine.png", days:["Pull Day","Whole Body","Back"] },
+  { id:"default-rudern-kh", name:"Dumbbell Row", muscle:"Back", exerciseType:"basic", photo:"images/exercises/Rudern_kh.png", days:["Pull Day","Whole Body","Back"] },
+  { id:"default-pullover-seil-kabel", name:"Cable Rope Pullover", muscle:"Back", exerciseType:"complement", photo:"images/exercises/pullover.png", days:["Pull Day","Whole Body","Back"] },
+  { id:"default-bizeps-kh", name:"Dumbbell Biceps Curl", muscle:"Biceps", exerciseType:"complement", photo:"images/exercises/bizeps_kh.png", days:["Pull Day","Whole Body","Arms"] },
+  { id:"default-bizeps-hammerkurl-kh", name:"Dumbbell Hammer Curl", muscle:"Biceps", exerciseType:"complement", photo:"images/exercises/bizeps_hammer_kh.png", days:["Pull Day","Whole Body","Arms"] },
+  { id:"default-bizeps-hammerkurl-seil", name:"Cable Rope Hammer Curl", muscle:"Biceps", exerciseType:"complement", photo:"images/exercises/bizeps_kabel_hammer.png", days:["Pull Day","Whole Body","Arms"] },
+  { id:"default-bizeps-machine", name:"Machine Biceps Curl", muscle:"Biceps", exerciseType:"complement", photo:"images/exercises/bizeps_machine.png", days:["Pull Day","Whole Body","Arms"] },
+  { id:"default-bizeps-machine-ez", name:"EZ-Bar Machine Curl", muscle:"Biceps", exerciseType:"complement", photo:"images/exercises/bizeps_ez_machine.png", days:["Pull Day","Whole Body","Arms"] },
 ];
 
-function withDefaultDevicePhotos(devices) {
+const DEFAULT_DEVICE_DE = {
+  "default-brustbankdruecken-lh": { name:"Bankdrücken Langhantel", muscle:"Brust" },
+  "default-brustdruecken-machine": { name:"Brustpresse Maschine", muscle:"Brust" },
+  "default-brustschraegbankdruecken-lh": { name:"Schrägbankdrücken Langhantel", muscle:"Brust" },
+  "default-trizeps-seil": { name:"Trizepsdrücken am Kabel", muscle:"Trizeps" },
+  "default-trizeps-dip-machine": { name:"Trizeps-Dip Maschine", muscle:"Trizeps" },
+  "default-flymachine": { name:"Butterfly Maschine", muscle:"Brust" },
+  "default-schulterpresse-kh": { name:"Schulterpresse Kurzhantel", muscle:"Schultern" },
+  "default-schulterpresse-machine": { name:"Schulterpresse Maschine", muscle:"Schultern" },
+  "default-seitenheben-kh-1": { name:"Seitheben Kurzhantel", muscle:"Schultern" },
+  "default-seitenheben-kh-2": { name:"Seitheben Maschine", muscle:"Schultern" },
+  "default-schulterdruecken-vorne-kh": { name:"Front-Schulterdrücken Kurzhantel", muscle:"Schultern" },
+  "default-trizeps-kh": { name:"Trizepsstrecken Kurzhantel", muscle:"Trizeps" },
+  "default-latzug-kabel": { name:"Latzug am Kabel", muscle:"Rücken" },
+  "default-rudern-kabelzug": { name:"Rudern am Kabelzug", muscle:"Rücken" },
+  "default-rudern-machine": { name:"Rudern Maschine", muscle:"Rücken" },
+  "default-schrags": { name:"Shrugs Kurzhantel", muscle:"Rücken" },
+  "default-fly-reverse": { name:"Reverse Butterfly", muscle:"Rücken" },
+  "default-tbar-geraet": { name:"T-Bar Rudern Maschine", muscle:"Rücken" },
+  "default-rudern-kh": { name:"Rudern Kurzhantel", muscle:"Rücken" },
+  "default-pullover-seil-kabel": { name:"Pullover am Kabel mit Seil", muscle:"Rücken" },
+  "default-bizeps-kh": { name:"Bizepscurl Kurzhantel", muscle:"Bizeps" },
+  "default-bizeps-hammerkurl-kh": { name:"Hammercurl Kurzhantel", muscle:"Bizeps" },
+  "default-bizeps-hammerkurl-seil": { name:"Hammercurl am Kabel mit Seil", muscle:"Bizeps" },
+  "default-bizeps-machine": { name:"Bizepscurl Maschine", muscle:"Bizeps" },
+  "default-bizeps-machine-ez": { name:"Bizepscurl Maschine SZ-Stange", muscle:"Bizeps" },
+};
+
+function localizedDefaultDevice(device, language = "en") {
+  const localized = language === "de" ? DEFAULT_DEVICE_DE[device.id] : null;
+  return localized ? { ...device, ...localized } : device;
+}
+
+function withDefaultDevicePhotos(devices, language = "en") {
   const defaultsById = Object.fromEntries(DEFAULT_DEVICES.map(d => [d.id, d]));
-  if (!Array.isArray(devices)) return DEFAULT_DEVICES;
+  if (!Array.isArray(devices)) return DEFAULT_DEVICES.map(d => localizedDefaultDevice(d, language));
   const seen = new Set(devices.map(d => d.id));
   const updated = devices.map(d => {
     const def = defaultsById[d.id];
-    return def ? { ...d, name: def.name, muscle: def.muscle, photo: def.photo, days: def.days } : d;
+    if (!def) return { ...d, exerciseType: d.exerciseType || "complement" };
+    const manualPhoto = typeof d.photo === "string" && d.photo.startsWith("data:");
+    const localized = localizedDefaultDevice(def, language);
+    return { ...d, name: localized.name, muscle: localized.muscle, exerciseType: def.exerciseType, photo: manualPhoto ? d.photo : def.photo, days: def.days };
   });
   DEFAULT_DEVICES.forEach(d => {
-    if (!seen.has(d.id)) updated.push(d);
+    if (!seen.has(d.id)) updated.push(localizedDefaultDevice(d, language));
   });
   return updated;
 }
@@ -549,6 +669,26 @@ function deviceMatchesDay(device, dayName) {
   return days.some(d => dayKey(d) === key);
 }
 
+function isLargeSuggestionGroup(muscle) {
+  const key = groupKey(muscle);
+  return key === groupKey("Chest") || key === groupKey("Back") || key === groupKey("Brust") || key === groupKey("Rücken");
+}
+
+function getSessionGroupStats(sessionLogs, devices, muscle) {
+  const key = groupKey(muscle);
+  return sessionLogs.reduce((acc, log) => {
+    const d = devices.find(x => x.id === log.deviceId);
+    if (!d || groupKey(d.muscle) !== key) return acc;
+    if (d.exerciseType === "basic") acc.basic += 1;
+    else acc.complement += 1;
+    return acc;
+  }, { basic: 0, complement: 0 });
+}
+
+function hasEnoughLargeGroupVolume(stats) {
+  return (stats.basic >= 2 && stats.complement >= 1) || (stats.basic >= 1 && stats.complement >= 2);
+}
+
 function getMuscleGroups(devices, groupPhotos = {}) {
   const map = {};
   (devices || []).forEach(d => {
@@ -562,7 +702,7 @@ function getMuscleGroups(devices, groupPhotos = {}) {
   return Object.values(map).sort((a,b) => a.name.localeCompare(b.name));
 }
 
-function GroupCard({ group, onClick }) {
+function GroupCard({ group, onClick, language = "en" }) {
   return (
     <button onClick={onClick} style={{width:"100%",background:"#1e293b",border:"1px solid #334155",
       borderRadius:16,padding:12,cursor:"pointer",display:"flex",alignItems:"center",gap:12,
@@ -574,7 +714,7 @@ function GroupCard({ group, onClick }) {
           </div>}
       <div style={{flex:1}}>
         <div style={{fontSize:16,fontWeight:800,color:"#f1f5f9"}}>{group.name}</div>
-        <div style={{fontSize:12,color:"#64748b",marginTop:3}}>{group.count} exercises</div>
+        <div style={{fontSize:12,color:"#64748b",marginTop:3}}>{group.count} {language==="de"?"Übungen":"exercises"}</div>
       </div>
       <Icon d={Icons.play} size={16} color="#60a5fa" />
     </button>
@@ -582,9 +722,9 @@ function GroupCard({ group, onClick }) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// DAY SETUP — full CRUD like Devices
+// DAY SETUP — full CRUD like Exercises
 // ═══════════════════════════════════════════════════════════════
-function DaySetup({ dayTemplates, setDayTemplates, onStart, onRequestDeleteDays }) {
+function DaySetup({ dayTemplates, setDayTemplates, onStart, onRequestDeleteDays, language }) {
   const [date, setDate] = useState(today());
   const [selected, setSelected] = useState(null);
   const [mode, setMode] = useState(null); // null | "add" | {editing day template}
@@ -641,21 +781,21 @@ function DaySetup({ dayTemplates, setDayTemplates, onStart, onRequestDeleteDays 
   return (
     <div style={S.screen}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-        <h2 style={{...S.title,margin:0}}>Start Gym Day</h2>
-        <button style={S.dangerSmall} onClick={onRequestDeleteDays}>Clear custom</button>
+        <h2 style={{...S.title,margin:0}}>{t(language,"startGymDay")}</h2>
+        <button style={S.dangerSmall} onClick={onRequestDeleteDays}>{t(language,"clearCustom")}</button>
       </div>
 
       {/* Date picker */}
       <div style={S.block}>
-        <label style={S.lbl}>Training Date</label>
+        <label style={S.lbl}>{t(language,"trainingDate")}</label>
         <input style={{...inp,borderColor:fd?"#3b82f6":"#475569"}}
           type="date" value={date} onChange={e=>setDate(e.target.value)}
           onFocus={()=>setFd(true)} onBlur={()=>setFd(false)} />
         <div style={{color:"#60a5fa",fontSize:16,fontWeight:800,marginTop:6}}>{formatDate(date)}</div>
       </div>
 
-      {/* Day list — like devices */}
-      <label style={S.lbl}>Choose Training Day</label>
+      {/* Day list — like exercises */}
+      <label style={S.lbl}>{t(language,"chooseTrainingDay")}</label>
       <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
         {allDays.map(day => {
           const isSelected = activeSelected === day.name;
@@ -670,9 +810,9 @@ function DaySetup({ dayTemplates, setDayTemplates, onStart, onRequestDeleteDays 
                 background: isSelected ? "#3b82f6" : "#334155",
                 boxShadow: isSelected ? "0 0 6px #3b82f6" : "none"}} />
               <span style={{flex:1,fontSize:15,fontWeight: isSelected?700:500,
-                color: isSelected?"#f1f5f9":"#94a3b8"}}>{day.name}</span>
+                color: isSelected?"#f1f5f9":"#94a3b8"}}>{displayDayName(day.name, language)}</span>
               {day.isDefault
-                ? <span style={{fontSize:10,color:"#475569",fontWeight:600}}>DEFAULT</span>
+                ? <span style={{fontSize:10,color:"#475569",fontWeight:600}}>{t(language,"default")}</span>
                 : <>
                     <button style={S.iconBtn} onClick={e=>{e.stopPropagation();setMode(day);setEditName(day.name);}}>
                       <Icon d={Icons.edit} size={15} color="#60a5fa" />
@@ -690,15 +830,15 @@ function DaySetup({ dayTemplates, setDayTemplates, onStart, onRequestDeleteDays 
       {/* Add / Edit form */}
       {mode ? (
         <div style={S.form}>
-          <label style={S.lbl}>{mode==="add"?"New Day Name":"Edit Day Name"}</label>
+          <label style={S.lbl}>{mode==="add"?t(language,"newDayName"):t(language,"editDayName")}</label>
           <input style={{...inp,borderColor:fe?"#3b82f6":"#475569",
             boxShadow:fe?"0 0 0 3px rgba(59,130,246,0.2)":"none"}}
-            placeholder="e.g. Shoulder Day, Cardio, Full Body…"
+            placeholder={language==="de"?"z.B. Schulter-Tag, Cardio, Ganzkörper":"e.g. Shoulder Day, Cardio, Full Body"}
             value={editName} onChange={e=>setEditName(e.target.value)}
             onFocus={()=>setFe(true)} onBlur={()=>setFe(false)} autoFocus />
           <div style={{display:"flex",gap:8}}>
-            <button style={S.btnSec} onClick={()=>{setMode(null);setEditName("");}}>Cancel</button>
-            <button style={S.btnPri} onClick={saveDay}>{mode==="add"?"Add Day":"Save Changes"}</button>
+            <button style={S.btnSec} onClick={()=>{setMode(null);setEditName("");}}>{language==="de"?"Abbrechen":"Cancel"}</button>
+            <button style={S.btnPri} onClick={saveDay}>{mode==="add"?t(language,"addNewDay"):t(language,"saveChanges")}</button>
           </div>
         </div>
       ) : (
@@ -706,14 +846,14 @@ function DaySetup({ dayTemplates, setDayTemplates, onStart, onRequestDeleteDays 
           alignItems:"center",justifyContent:"center",gap:6,border:"2px dashed #475569",
           background:"transparent"}}
           onClick={()=>{setMode("add");setEditName("");}}>
-          <Icon d={Icons.plus} size={16} color="#94a3b8" /> Add New Day
+          <Icon d={Icons.plus} size={16} color="#94a3b8" /> {t(language,"addNewDay")}
         </button>
       )}
 
       {/* Start button */}
       {!mode && <button style={S.btnPri} onClick={start}>
         <Icon d={Icons.play} size={16} color="#fff" />
-        Start {activeSelected || "Day"}
+        {t(language,"start")} {displayDayName(activeSelected || "Day", language)}
       </button>}
     </div>
   );
@@ -723,7 +863,7 @@ function DaySetup({ dayTemplates, setDayTemplates, onStart, onRequestDeleteDays 
 // ═══════════════════════════════════════════════════════════════
 // SESSION SCREEN
 // ═══════════════════════════════════════════════════════════════
-function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, logs, setLogs, timerSettings, onEnd }) {
+function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, logs, setLogs, timerSettings, onEnd, language }) {
   const [activeId, setActiveId] = useState(null);
   const [sets, setSets] = useState([{weight:"",reps:""}]);
   const [addingDevice, setAddingDevice] = useState(false);
@@ -735,15 +875,16 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
   const [restTimer, setRestTimer] = useState(null);
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
   const [restNotice, setRestNotice] = useState(null);
+  const [volumeNoticeGroups, setVolumeNoticeGroups] = useState([]);
 
   useEffect(() => {
     if (!restTimer) return;
     if (restTimer.remaining <= 0) {
       const message = restTimer.type === "set"
-        ? "⏱ Satzpause ist vorbei. Bereit für den nächsten Satz!"
-        : "⏱ Übungspause ist vorbei. Bereit für die nächste Übung!";
+        ? t(language,"setRestOver")
+        : t(language,"exerciseRestOver");
       setRestTimer(null);
-      setRestNotice({ title: "⏱ Restzeit vorbei", message });
+      setRestNotice({ title: t(language,"restOver"), message });
       return;
     }
     const id = setTimeout(() => {
@@ -762,10 +903,10 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
 
   const openRestNotice = (action = null, payload = null) => {
     if (!restTimer || restTimer.remaining <= 0) return false;
-    const restLabel = restTimer.type === "set" ? "Satzpause" : "Übungspause";
+    const restLabel = restTimer.type === "set" ? t(language,"setRest") : t(language,"exerciseRest");
     setRestNotice({
-      title: "⏱ Restzeit läuft noch",
-      message: `${restLabel} läuft noch: ${formatRestTime(restTimer.remaining)}. Du brauchst noch etwas Erholung, bevor du sauber weitermachst.`,
+      title: t(language,"restRunning"),
+      message: `${restLabel} ${t(language,"restRunningMessage")}: ${formatRestTime(restTimer.remaining)}. ${t(language,"recoveryMessage")}`,
       action,
       payload
     });
@@ -780,20 +921,25 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
   };
 
   const addNextSet = () => {
-    // Wenn die Pause noch läuft, zeige Hinweis, aber blockiere den nächsten Satz nicht.
     openRestNotice();
-    // Danach startet die Satzpause neu ab der eingestellten Zeit.
     setSets(prev=>[...prev,{weight:"",reps:""}]);
     startRestTimer("set");
   };
 
   const active = devices.find(d=>d.id===activeId);
   const todaysLogs = logs.filter(l=>l.sessionId===session.id);
+  const sessionDoneIds = [...new Set([...doneIds, ...todaysLogs.map(l=>l.deviceId)])];
   const warn = activeId ? getProgressWarning(logs.filter(l=>l.id!==editingLog?.id), activeId) : false;
   const dayDevices = devices.filter(d => deviceMatchesDay(d, session.dayName));
   const groups = getMuscleGroups(dayDevices, groupPhotos);
   const currentGroup = selectedGroup ? groups.find(g => g.key === selectedGroup) : null;
   const filteredDevices = selectedGroup ? dayDevices.filter(d => groupKey(d.muscle) === selectedGroup) : dayDevices;
+  const currentGroupStats = currentGroup ? getSessionGroupStats(todaysLogs, devices, currentGroup.name) : { basic: 0, complement: 0 };
+  const shouldSuggestComplement = d => {
+    if (!currentGroup || !isLargeSuggestionGroup(d.muscle)) return false;
+    if (d.exerciseType !== "complement" || sessionDoneIds.includes(d.id)) return false;
+    return currentGroupStats.basic >= 1 && !hasEnoughLargeGroupVolume(currentGroupStats);
+  };
 
   const doChooseDevice = id => {
     setShowChooser(false); setAddingDevice(false);
@@ -802,20 +948,18 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
   };
 
   const chooseDevice = id => {
-    // Wenn die Übungspause/Satzpause noch läuft, zeige zuerst ein OK-Popup.
-    // Nach OK wird die neue Übung trotzdem geöffnet.
     if (openRestNotice("chooseDevice", id)) return;
     doChooseDevice(id);
   };
 
   const saveDevice = () => {
     if (!activeId) {
-      alert("Bitte zuerst eine Übung auswählen.");
+      alert(t(language,"pleaseChoose"));
       return;
     }
     const cleaned = cleanSets(sets);
     if (!cleaned.length) {
-      alert("Bitte mindestens einen gültigen Satz mit Gewicht und Wiederholungen eintragen.");
+      alert(t(language,"pleaseSet"));
       return;
     }
 
@@ -827,6 +971,7 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
     if (!activeId) return;
     const cleaned = cleanSets(sets);
     if (!cleaned.length) return;
+    const savedDevice = devices.find(d => d.id === activeId);
 
     const base = { deviceId:activeId, dayName:session.dayName,
       date:new Date(session.date).toISOString(), sets:cleaned, sessionId:session.id };
@@ -834,9 +979,22 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
     if (editingLog) {
       setLogs(prev=>prev.map(l=>l.id===editingLog.id?{...editingLog,...base}:l));
     } else {
-      setLogs(prev=>[...prev,{id:uid(),...base}]);
+      const newLog = {id:uid(),...base};
+      const nextSessionLogs = [...todaysLogs, newLog];
+      setLogs(prev=>[...prev,newLog]);
       setDoneIds(prev=>[...new Set([...prev,activeId])]);
       startRestTimer("exercise");
+      if (savedDevice && isLargeSuggestionGroup(savedDevice.muscle)) {
+        const muscleKey = groupKey(savedDevice.muscle);
+        const stats = getSessionGroupStats(nextSessionLogs, devices, savedDevice.muscle);
+        if (hasEnoughLargeGroupVolume(stats) && !volumeNoticeGroups.includes(muscleKey)) {
+          setVolumeNoticeGroups(prev=>[...new Set([...prev, muscleKey])]);
+          setRestNotice({
+            title: t(language,"volumeReached"),
+            message: `${t(language,"volumeMessage")} ${groupName(savedDevice.muscle)}: ${stats.basic} ${t(language,"basic")} and ${stats.complement} ${t(language,"complement")}. ${t(language,"continueStrong")}`
+          });
+        }
+      }
     }
 
     setSets([{weight:"",reps:""}]);
@@ -867,18 +1025,18 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
     <div style={S.screen}>
       {saveConfirmOpen && <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
         <div style={{width:"100%",maxWidth:360,background:"#1e293b",border:"1px solid #475569",borderRadius:18,padding:20}}>
-          <h3 style={{margin:"0 0 8px",fontSize:20,color:"#fff"}}>{editingLog?"Änderung speichern?":"Übung wirklich fertig?"}</h3>
+          <h3 style={{margin:"0 0 8px",fontSize:20,color:"#fff"}}>{editingLog?t(language,"saveChangesQuestion"):t(language,"finishExercise")}</h3>
           <p style={{color:"#cbd5e1",margin:"0 0 16px",lineHeight:1.5}}>
-            {editingLog?"Soll diese Übung wirklich aktualisiert werden?":"Soll der Log gespeichert werden und du zur nächsten Übung gehen?"}
+            {editingLog?t(language,"updateExerciseLog"):t(language,"saveLogNext")}
           </p>
           <div style={{display:"flex",gap:8}}>
-            <button style={{flex:1,background:"#334155",border:"none",borderRadius:12,color:"#cbd5e1",fontWeight:700,padding:13,cursor:"pointer",fontFamily:"inherit"}} onClick={()=>setSaveConfirmOpen(false)}>Nein</button>
-            <button style={{flex:1,background:"#1d4ed8",border:"none",borderRadius:12,color:"#fff",fontWeight:800,padding:13,cursor:"pointer",fontFamily:"inherit"}} onClick={performSaveDevice}>Ja, speichern</button>
+            <button style={{flex:1,background:"#334155",border:"none",borderRadius:12,color:"#cbd5e1",fontWeight:700,padding:13,cursor:"pointer",fontFamily:"inherit"}} onClick={()=>setSaveConfirmOpen(false)}>{t(language,"no")}</button>
+            <button style={{flex:1,background:"#1d4ed8",border:"none",borderRadius:12,color:"#fff",fontWeight:800,padding:13,cursor:"pointer",fontFamily:"inherit"}} onClick={performSaveDevice}>{t(language,"yesSave")}</button>
           </div>
         </div>
       </div>}
-      <button style={S.backBtn} onClick={onEnd}><Icon d={Icons.back} size={18} /> End / Back</button>
-      <h2 style={S.title}>{session.dayName}</h2>
+      <button style={S.backBtn} onClick={onEnd}><Icon d={Icons.back} size={18} /> {t(language,"endBack")}</button>
+      <h2 style={S.title}>{displayDayName(session.dayName, language)}</h2>
 
       {restNotice && <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.72)",zIndex:350,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
         <div style={{width:"100%",maxWidth:360,background:"#1e293b",border:"1px solid #f59e0b",borderRadius:18,padding:20,boxShadow:"0 10px 40px rgba(0,0,0,0.45)"}}>
@@ -903,14 +1061,14 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
       </div>}
 
       <div style={S.block}>
-        <label style={S.lbl}>Training Date</label>
+        <label style={S.lbl}>{t(language,"trainingDate")}</label>
         <input style={inp} type="date" value={session.date}
           onChange={e=>setSession(prev=>({...prev,date:e.target.value}))} />
         <div style={{color:"#60a5fa",fontSize:15,fontWeight:800,marginTop:6}}>{formatDate(session.date)}</div>
       </div>
 
       {todaysLogs.length > 0 && <div style={S.block}>
-        <label style={S.lbl}>Saved today</label>
+        <label style={S.lbl}>{t(language,"savedToday")}</label>
         {todaysLogs.map(log=>{
           const d=devices.find(x=>x.id===log.deviceId);
           return <div key={log.id} style={{display:"flex",alignItems:"center",gap:8,
@@ -927,51 +1085,60 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
       </div>}
 
       {!activeId && !addingDevice && showChooser && <div style={S.block}>
-        <label style={S.lbl}>{todaysLogs.length===0?"Choose first exercise":"Add next exercise"}</label>
-        {devices.length===0&&<div style={{color:"#64748b",fontSize:13,padding:"8px 0"}}>No devices yet. Add your first one below.</div>}
-        {devices.length>0&&dayDevices.length===0&&<div style={{color:"#64748b",fontSize:13,padding:"8px 0"}}>No exercises tagged for this day yet.</div>}
+        <label style={S.lbl}>{todaysLogs.length===0?t(language,"chooseFirstExercise"):t(language,"addNextExercise")}</label>
+        {devices.length===0&&<div style={{color:"#64748b",fontSize:13,padding:"8px 0"}}>{t(language,"noExercises")}</div>}
+        {devices.length>0&&dayDevices.length===0&&<div style={{color:"#64748b",fontSize:13,padding:"8px 0"}}>{t(language,"noTagged")}</div>}
 
         {!selectedGroup && dayDevices.length>0 && <>
-          <div style={{color:"#64748b",fontSize:13,lineHeight:1.5,marginBottom:10}}>First choose a muscle group, then choose the exercise.</div>
+          <div style={{color:"#64748b",fontSize:13,lineHeight:1.5,marginBottom:10}}>{t(language,"firstChooseGroup")}</div>
           <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:10}}>
-            {groups.map(g=><GroupCard key={g.key} group={g} onClick={()=>setSelectedGroup(g.key)} />)}
+            {groups.map(g=><GroupCard language={language} key={g.key} group={g} onClick={()=>setSelectedGroup(g.key)} />)}
           </div>
         </>}
 
         {selectedGroup && <>
           <button style={{...S.backBtn,marginBottom:10}} onClick={()=>setSelectedGroup(null)}>
-            <Icon d={Icons.back} size={17} /> Back to muscle groups
+            <Icon d={Icons.back} size={17} /> {t(language,"backToGroups")}
           </button>
           <div style={{fontSize:16,fontWeight:800,color:"#f1f5f9",marginBottom:10}}>{currentGroup?.name || "Exercises"}</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-            {filteredDevices.map(d=>(
-              <button key={d.id} style={{background:"#0f172a",border:"1px solid #334155",borderRadius:14,
-                color:"#e2e8f0",padding:10,cursor:"pointer",display:"flex",flexDirection:"column",
-                gap:6,alignItems:"center",minHeight:90,position:"relative"}}
-                onClick={()=>chooseDevice(d.id)}>
-                {d.photo?<img src={d.photo} alt="" style={{width:54,height:54,borderRadius:10,objectFit:"cover"}} />
-                  :<div style={{width:54,height:54,borderRadius:10,background:"#1e293b",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                    <Icon d={Icons.dumbbell} size={22} color="#475569" /></div>}
-                <span style={{fontSize:12,fontWeight:600,textAlign:"center"}}>{d.name}</span>
-                {doneIds.includes(d.id)&&<span style={{position:"absolute",top:6,right:6,
-                  background:"#22c55e",borderRadius:20,fontSize:10,fontWeight:800,
-                  color:"#fff",padding:"2px 6px"}}>✓</span>}
-              </button>
-            ))}
+            {filteredDevices.map(d=>{
+              const suggested = shouldSuggestComplement(d);
+              return (
+                <button key={d.id} style={{background:suggested?"#172554":"#0f172a",border:suggested?"1px solid #60a5fa":"1px solid #334155",borderRadius:14,
+                  color:"#e2e8f0",padding:10,cursor:"pointer",display:"flex",flexDirection:"column",
+                  gap:6,alignItems:"center",minHeight:90,position:"relative",boxShadow:suggested?"0 0 0 2px rgba(96,165,250,0.18)":"none"}}
+                  onClick={()=>chooseDevice(d.id)}>
+                  {suggested&&<span style={{position:"absolute",top:6,left:6,
+                    background:"#fb7185",border:"1px solid #fecdd3",borderRadius:20,fontSize:12,fontWeight:900,
+                    color:"#1f0710",padding:"4px 9px",boxShadow:"0 0 18px rgba(251,113,133,0.55)"}}>→ Suggest</span>}
+                  {d.photo?<img src={d.photo} alt="" style={{width:54,height:54,borderRadius:10,objectFit:"cover"}} />
+                    :<div style={{width:54,height:54,borderRadius:10,background:"#1e293b",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                      <Icon d={Icons.dumbbell} size={22} color="#475569" /></div>}
+                  <span style={{fontSize:12,fontWeight:600,textAlign:"center"}}>{d.name}</span>
+                  <span style={{...S.typeBadge,background:d.exerciseType==="basic"?"#1e3a8a":"#334155",color:d.exerciseType==="basic"?"#bfdbfe":"#cbd5e1"}}>
+                    {exerciseTypeLabel(d.exerciseType, language)}
+                  </span>
+                  {sessionDoneIds.includes(d.id)&&<span style={{position:"absolute",top:6,right:6,
+                    background:"#22c55e",borderRadius:20,fontSize:10,fontWeight:800,
+                    color:"#fff",padding:"2px 6px"}}>✓</span>}
+                </button>
+              );
+            })}
           </div>
         </>}
 
         <button style={{...S.btnSec,width:"100%",marginBottom:8,display:"flex",
           alignItems:"center",justifyContent:"center",gap:6}}
           onClick={()=>{setAddingDevice(true);setShowChooser(false);}}>
-          <Icon d={Icons.plus} size={16} /> Add new device
+          <Icon d={Icons.plus} size={16} /> {t(language,"addNewExercise")}
         </button>
         <button style={S.btnPri} onClick={onEnd}>
-          <Icon d={Icons.check} size={16} color="#fff" /> Finish Workout
+          <Icon d={Icons.check} size={16} color="#fff" /> {t(language,"finishWorkout")}
         </button>
       </div>}
 
-      {addingDevice && <DeviceForm onCancel={()=>{setAddingDevice(false);setShowChooser(true);}} onSave={addNewDevice} />}
+      {addingDevice && <DeviceForm language={language} onCancel={()=>{setAddingDevice(false);setShowChooser(true);}} onSave={addNewDevice} />}
 
       {active && <div style={S.block}>
         <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:10}}>
@@ -981,17 +1148,22 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
           <div>
             <div style={{fontSize:17,fontWeight:800,color:"#f1f5f9"}}>{active.name}</div>
             <div style={{fontSize:12,color:"#94a3b8"}}>{groupName(active.muscle)}</div>
+            <div style={{marginTop:4}}>
+              <span style={{...S.typeBadge,background:active.exerciseType==="basic"?"#1e3a8a":"#334155",color:active.exerciseType==="basic"?"#bfdbfe":"#cbd5e1"}}>
+                {exerciseTypeLabel(active.exerciseType, language)}
+              </span>
+            </div>
           </div>
         </div>
 
         {warn && <div style={S.warn}><Icon d={Icons.warning} size={15} color="#fbbf24" /> Same weight 2 weeks — time to raise! 💪</div>}
 
-        <LastLogs logs={logs.filter(l=>l.id!==editingLog?.id)} deviceId={active.id} dayName={session.dayName} />
+        <LastLogs language={language} logs={logs.filter(l=>l.id!==editingLog?.id)} deviceId={active.id} dayName={session.dayName} />
 
-        <label style={S.lbl}>{editingLog?"Edit sets":"Log sets"}</label>
+        <label style={S.lbl}>{editingLog?t(language,"editSets"):t(language,"logSets")}</label>
         {sets.map((s,i)=>(
           <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-            <span style={{color:"#64748b",fontSize:13,minWidth:44}}>Set {i+1}</span>
+            <span style={{color:"#64748b",fontSize:13,minWidth:44}}>{language==="de"?"Satz":"Set"} {i+1}</span>
             <input style={{...inp,width:80,textAlign:"center",padding:"10px 6px",
               borderColor:foc[`w${i}`]?"#3b82f6":"#475569",
               boxShadow:foc[`w${i}`]?"0 0 0 3px rgba(59,130,246,0.2)":"none"}}
@@ -1016,14 +1188,14 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
           color:"#fff",fontSize:18,fontWeight:900,padding:"17px 16px",cursor:"pointer",
           width:"100%",fontFamily:"inherit",marginBottom:12,boxShadow:"0 8px 26px rgba(37,99,235,0.35)",letterSpacing:0.3}}
           onClick={addNextSet}>
-          + Add Next Set
+          + {t(language,"addNextSet")}
         </button>
         <div style={{display:"flex",gap:8}}>
           <button style={{...S.btnSec,flex:1}} onClick={()=>{setActiveId(null);setEditingLog(null);setSets([{weight:"",reps:""}]);setShowChooser(true);}}>
             ← Back
           </button>
           <button style={{...S.btnPri,flex:2}} onClick={saveDevice}>
-            {editingLog?"Update Exercise":"Save + Next Exercise"}
+            {editingLog?t(language,"updateExercise"):t(language,"saveNextExercise")}
           </button>
         </div>
       </div>}
@@ -1035,7 +1207,7 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
 // ═══════════════════════════════════════════════════════════════
 // DEVICES SCREEN
 // ═══════════════════════════════════════════════════════════════
-function DevicesScreen({ devices, setDevices, groupPhotos, setGroupPhotos, onRequestDeleteAll }) {
+function DevicesScreen({ devices, setDevices, groupPhotos, setGroupPhotos, onRequestDeleteAll, language }) {
   const [mode, setMode] = useState(null);
   const [openGroup, setOpenGroup] = useState(null);
   const [editingGroupPhoto, setEditingGroupPhoto] = useState(false);
@@ -1058,14 +1230,14 @@ function DevicesScreen({ devices, setDevices, groupPhotos, setGroupPhotos, onReq
   if (openGroup && currentGroup) return (
     <div style={S.screen}>
       <button style={S.backBtn} onClick={()=>{setOpenGroup(null);setEditingGroupPhoto(false);}}>
-        <Icon d={Icons.back} size={18} /> Back to groups
+        <Icon d={Icons.back} size={18} /> {t(language,"backToGroups")}
       </button>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,gap:10}}>
         <div>
           <h2 style={{...S.title,margin:0}}>{currentGroup.name}</h2>
-          <div style={{fontSize:12,color:"#64748b",marginTop:4}}>{currentGroup.count} exercises</div>
+          <div style={{fontSize:12,color:"#64748b",marginTop:4}}>{currentGroup.count} {language==="de"?"Übungen":"exercises"}</div>
         </div>
-        <button style={S.dangerSmall} onClick={()=>setEditingGroupPhoto(v=>!v)}>Group photo</button>
+        <button style={S.dangerSmall} onClick={()=>setEditingGroupPhoto(v=>!v)}>{t(language,"groupPhoto")}</button>
       </div>
 
       <div style={{...S.block,padding:12}}>
@@ -1075,13 +1247,13 @@ function DevicesScreen({ devices, setDevices, groupPhotos, setGroupPhotos, onReq
               <Icon d={Icons.dumbbell} size={34} color="#475569" />
             </div>}
         {editingGroupPhoto && <>
-          <label style={S.lbl}>Photo for this group</label>
-          <PhotoPicker onPhoto={setGroupPhoto} label={currentGroup.photo?"Change Group Photo":"Add Group Photo"} />
-          {groupPhotos?.[openGroup] && <button style={{...S.btnSec,width:"100%",marginTop:8}} onClick={()=>setGroupPhotos(prev=>{const n={...prev}; delete n[openGroup]; return n;})}>Remove group photo</button>}
+          <label style={S.lbl}>{t(language,"photoForGroup")}</label>
+          <PhotoPicker onPhoto={setGroupPhoto} label={currentGroup.photo?t(language,"changeGroupPhoto"):t(language,"addGroupPhoto")} />
+          {groupPhotos?.[openGroup] && <button style={{...S.btnSec,width:"100%",marginTop:8}} onClick={()=>setGroupPhotos(prev=>{const n={...prev}; delete n[openGroup]; return n;})}>{t(language,"removeGroupPhoto")}</button>}
         </>}
       </div>
 
-      {currentDevices.length===0&&<div style={S.empty}>No devices in this group.</div>}
+      {currentDevices.length===0&&<div style={S.empty}>{t(language,"noExercisesGroup")}</div>}
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         {currentDevices.map(d=>(
           <div key={d.id} style={S.card}>
@@ -1090,13 +1262,18 @@ function DevicesScreen({ devices, setDevices, groupPhotos, setGroupPhotos, onReq
             <div style={{flex:1}}>
               <div style={{fontSize:15,fontWeight:700,color:"#f1f5f9"}}>{d.name}</div>
               <div style={{fontSize:12,color:"#64748b",marginTop:2}}>{groupName(d.muscle)}</div>
+              <div style={{marginTop:5}}>
+                <span style={{...S.typeBadge,background:d.exerciseType==="basic"?"#1e3a8a":"#334155",color:d.exerciseType==="basic"?"#bfdbfe":"#cbd5e1"}}>
+                  {exerciseTypeLabel(d.exerciseType, language)}
+                </span>
+              </div>
             </div>
             <button style={S.iconBtn} onClick={()=>setMode(d)}><Icon d={Icons.edit} size={17} color="#60a5fa" /></button>
             <button style={S.iconBtn} onClick={()=>setDevices(prev=>prev.filter(x=>x.id!==d.id))}><Icon d={Icons.trash} size={17} color="#ef4444" /></button>
           </div>
         ))}
       </div>
-      {mode?<DeviceForm initial={mode==="add"?null:mode} onSave={handleSave} onCancel={()=>setMode(null)} />
+      {mode?<DeviceForm language={language} initial={mode==="add"?null:mode} onSave={handleSave} onCancel={()=>setMode(null)} />
         :<button style={S.fab} onClick={()=>setMode("add")}><Icon d={Icons.plus} size={24} color="#fff" /></button>}
     </div>
   );
@@ -1104,17 +1281,17 @@ function DevicesScreen({ devices, setDevices, groupPhotos, setGroupPhotos, onReq
   return (
     <div style={S.screen}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-        <h2 style={{...S.title,margin:0}}>Devices</h2>
-        <button style={S.dangerSmall} onClick={onRequestDeleteAll}>Delete all</button>
+        <h2 style={{...S.title,margin:0}}>{t(language,"exercises")}</h2>
+        <button style={S.dangerSmall} onClick={onRequestDeleteAll}>{t(language,"deleteAll")}</button>
       </div>
-      {devices.length===0&&!mode&&<div style={S.empty}>No devices yet — tap + to add your first machine!</div>}
+      {devices.length===0&&!mode&&<div style={S.empty}>{language==="de"?"Noch keine Übungen. Tippe auf +, um deine erste Übung hinzuzufügen.":"No exercises yet. Tap + to add your first exercise."}</div>}
       {devices.length>0 && !mode && <>
-        <div style={{color:"#64748b",fontSize:13,lineHeight:1.5,marginBottom:12}}>Your devices are grouped by muscle group, so long lists stay easy to navigate.</div>
+        <div style={{color:"#64748b",fontSize:13,lineHeight:1.5,marginBottom:12}}>{t(language,"exercisesGrouped")}</div>
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          {groups.map(g=><GroupCard key={g.key} group={g} onClick={()=>setOpenGroup(g.key)} />)}
+          {groups.map(g=><GroupCard language={language} key={g.key} group={g} onClick={()=>setOpenGroup(g.key)} />)}
         </div>
       </>}
-      {mode?<DeviceForm initial={mode==="add"?null:mode} onSave={handleSave} onCancel={()=>setMode(null)} />
+      {mode?<DeviceForm language={language} initial={mode==="add"?null:mode} onSave={handleSave} onCancel={()=>setMode(null)} />
         :<button style={S.fab} onClick={()=>setMode("add")}><Icon d={Icons.plus} size={24} color="#fff" /></button>}
     </div>
   );
@@ -1124,7 +1301,7 @@ function DevicesScreen({ devices, setDevices, groupPhotos, setGroupPhotos, onReq
 // ═══════════════════════════════════════════════════════════════
 // HISTORY SCREEN
 // ═══════════════════════════════════════════════════════════════
-function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSession }) {
+function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSession, language }) {
   const [view, setView] = useState("days");
   const [openSessionId, setOpenSessionId] = useState(null);
   const [openDeviceId, setOpenDeviceId] = useState(null);
@@ -1186,7 +1363,7 @@ function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSes
         </div>
       ) : (
         <>
-          <h2 style={S.title}>{openedSession.dayName}</h2>
+          <h2 style={S.title}>{displayDayName(openedSession.dayName, language)}</h2>
           <div style={{color:"#60a5fa",fontSize:15,fontWeight:800,marginBottom:12}}>{formatDate(openedSession.date)}</div>
         </>
       )}
@@ -1203,7 +1380,7 @@ function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSes
         dayName: openedSession.dayName,
         date: new Date(openedSession.date).toISOString().slice(0,10)
       })}>
-        <Icon d={Icons.plus} size={16} color="#fff" /> Add exercise to this day
+        <Icon d={Icons.plus} size={16} color="#fff" /> {t(language,"addExerciseToDay")}
       </button>
       {openedSession.logs.map(log=>{
         const d=devices.find(x=>x.id===log.deviceId);
@@ -1226,13 +1403,13 @@ function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSes
     </div>
   );
 
-  // Detail: device
+  // Detail: exercise
   if (openedDevice) return (
     <div style={S.screen}>
       <button style={S.backBtn} onClick={()=>setOpenDeviceId(null)}><Icon d={Icons.back} size={18} /> Back</button>
       <h2 style={S.title}>{openedDevice.name}</h2>
       <div style={{color:"#94a3b8",fontSize:13,marginBottom:16}}>{openedDevice.muscle}</div>
-      {devLogs.length===0&&<div style={S.empty}>No sessions logged yet for this device.</div>}
+      {devLogs.length===0&&<div style={S.empty}>{t(language,"noSessionsExercise")}</div>}
       {devLogs.map(log=>(
         <div key={log.id} style={S.block}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
@@ -1256,8 +1433,8 @@ function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSes
   return (
     <div style={S.screen}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-        <h2 style={{...S.title,margin:0}}>History</h2>
-        <button style={S.dangerSmall} onClick={onRequestDeleteAll}>Delete all</button>
+        <h2 style={{...S.title,margin:0}}>{t(language,"history")}</h2>
+        <button style={S.dangerSmall} onClick={onRequestDeleteAll}>{t(language,"deleteAll")}</button>
       </div>
       {/* Segment */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,
@@ -1266,12 +1443,12 @@ function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSes
           <button key={k} style={{border:"none",borderRadius:10,padding:11,fontWeight:800,cursor:"pointer",
             background:view===k?"#1d4ed8":"transparent",color:view===k?"#fff":"#94a3b8",fontFamily:"inherit",
             fontSize:14,textTransform:"capitalize"}}
-            onClick={()=>setView(k)}>{k}</button>
+            onClick={()=>setView(k)}>{k === "devices" ? t(language,"exercises") : t(language,"days")}</button>
         ))}
       </div>
 
       {view==="days"&&<>
-        {sessions.length===0&&<div style={S.empty}>No saved sessions yet.</div>}
+        {sessions.length===0&&<div style={S.empty}>{t(language,"noSavedSessions")}</div>}
         {sessions.map(s=>(
           <div key={s.id} style={{width:"100%",background:"#1e293b",color:"#e2e8f0",
             border:"1px solid #334155",borderRadius:14,padding:14,marginBottom:10,
@@ -1290,8 +1467,8 @@ function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSes
               <>
                 <button style={{flex:1,background:"none",border:"none",color:"inherit",textAlign:"left",fontFamily:"inherit",cursor:"pointer",padding:0}}
                   onClick={()=>setOpenSessionId(s.id)}>
-                  <div style={{fontWeight:700,fontSize:15}}>{s.dayName}</div>
-                  <div style={{color:"#64748b",fontSize:12,marginTop:3}}>{formatDate(s.date)} · {s.logs.length} exercises</div>
+                  <div style={{fontWeight:700,fontSize:15}}>{displayDayName(s.dayName, language)}</div>
+                  <div style={{color:"#64748b",fontSize:12,marginTop:3}}>{formatDate(s.date)} · {s.logs.length} {language==="de"?"Übungen":"exercises"}</div>
                 </button>
                 <button style={S.iconBtn} onClick={()=>startEditSession(s)}><Icon d={Icons.edit} size={17} color="#60a5fa" /></button>
                 <button style={S.iconBtn} onClick={()=>deleteSession(s.id)}><Icon d={Icons.trash} size={17} color="#ef4444" /></button>
@@ -1302,7 +1479,7 @@ function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSes
       </>}
 
       {view==="devices"&&<>
-        {devices.length===0&&<div style={S.empty}>No devices yet.</div>}
+        {devices.length===0&&<div style={S.empty}>{language==="de"?"Noch keine Übungen.":"No exercises yet."}</div>}
         {devices.map(d=>{
           const count=logs.filter(l=>l.deviceId===d.id).length;
           const warn=getProgressWarning(logs,d.id);
@@ -1318,7 +1495,7 @@ function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSes
                     <Icon d={Icons.dumbbell} size={18} color="#475569" /></div>}
                 <div>
                   <div style={{fontWeight:700,fontSize:15}}>{d.name}</div>
-                  <div style={{color:"#64748b",fontSize:12,marginTop:2}}>{d.muscle||"No muscle group"} · {count} sessions</div>
+                  <div style={{color:"#64748b",fontSize:12,marginTop:2}}>{d.muscle||t(language,"noMuscleGroup")} · {exerciseTypeLabel(d.exerciseType, language)} · {count} sessions</div>
                 </div>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:6}}>
@@ -1336,9 +1513,11 @@ function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSes
 // ═══════════════════════════════════════════════════════════════
 // SETTINGS SCREEN
 // ═══════════════════════════════════════════════════════════════
-function SettingsScreen({ devices, days, logs, timerSettings, setTimerSettings, onImport }) {
+function SettingsScreen({ devices, days, logs, groupPhotos, timerSettings, setTimerSettings, language, setLanguage, onImport }) {
   const [msg, setMsg] = useState(""); const [msgOk, setMsgOk] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [exportJson, setExportJson] = useState(null);
+  const [pasteText, setPasteText] = useState("");
   const [setRestInput, setSetRestInput] = useState((timerSettings.setRestSeconds/60).toString().replace(".",","));
   const [exerciseRestInput, setExerciseRestInput] = useState((timerSettings.exerciseRestSeconds/60).toString().replace(".",","));
   const showMsg = (t,ok=false)=>{ setMsg(t); setMsgOk(ok); setTimeout(()=>setMsg(""),4000); };
@@ -1354,17 +1533,77 @@ function SettingsScreen({ devices, days, logs, timerSettings, setTimerSettings, 
   const saveSetRest = () => setTimerSettings(prev=>({...prev,setRestSeconds:Math.round(parseMinutes(setRestInput)*60)}));
   const saveExerciseRest = () => setTimerSettings(prev=>({...prev,exerciseRestSeconds:Math.round(parseMinutes(exerciseRestInput)*60)}));
 
+  // ── BACKUP ──────────────────────────────────────────────────
+  const doExport = () => {
+    const payload = {
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      devices,
+      days,
+      logs,
+      groupPhotos,
+      timerSettings,
+      language,
+    };
+    const json = JSON.stringify(payload, null, 2);
+    try {
+      const a = document.createElement("a");
+      a.href = "data:application/json;charset=utf-8," + encodeURIComponent(json);
+      a.download = `ironlog-backup-${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showMsg("✅ Backup downloaded! Save it to Files / iCloud.", true);
+    } catch {
+      setExportJson(json);
+    }
+  };
+
+  const doImportFile = e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!data.devices || !data.days || !data.logs) throw new Error("Invalid");
+        onImport(data);
+        showMsg(`✅ Restored: ${data.devices.length} ${t(language,"exercises").toLowerCase()}, ${data.days.length} ${t(language,"days").toLowerCase()}, ${data.logs.length} sessions.`, true);
+      } catch { showMsg("❌ Invalid backup file."); }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const doImportPaste = () => {
+    try {
+      const data = JSON.parse(pasteText.trim());
+      if (!data.devices || !data.days || !data.logs) throw new Error("Invalid");
+      onImport(data);
+      setPasteText("");
+      showMsg(`✅ Restored: ${data.devices.length} ${t(language,"exercises").toLowerCase()}, ${data.days.length} ${t(language,"days").toLowerCase()}, ${data.logs.length} sessions.`, true);
+    } catch { showMsg("❌ Invalid JSON. Copy the full backup text."); }
+  };
+
   const stats=[
-    {label:"Devices",value:devices.length,color:"#3b82f6"},
-    {label:"Training Days",value:days.length,color:"#8b5cf6"},
+    {label:t(language,"exercises"),value:devices.length,color:"#3b82f6"},
+    {label:language==="de"?"Trainingstage":"Training Days",value:days.length,color:"#8b5cf6"},
     {label:"Sessions",value:logs.length,color:"#10b981"},
-    {label:"Total Sets",value:logs.reduce((a,l)=>a+l.sets.length,0),color:"#f59e0b"},
+    {label:language==="de"?"Sätze gesamt":"Total Sets",value:logs.reduce((a,l)=>a+l.sets.length,0),color:"#f59e0b"},
   ];
 
   return (
     <div style={S.screen}>
-      <h2 style={S.title}>Settings</h2>
+      <h2 style={S.title}>{t(language,"settings")}</h2>
 
+      <div style={{...S.block,marginBottom:14}}>
+        <div style={{fontSize:15,fontWeight:800,color:"#f1f5f9",marginBottom:10}}>{t(language,"language")}</div>
+        <select style={inp} value={language} onChange={e=>setLanguage(e.target.value)}>
+          <option value="en">{t(language,"english")}</option>
+          <option value="de">{t(language,"german")}</option>
+        </select>
+      </div>
+
+      {/* Stats */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
         {stats.map(s=>(
           <div key={s.label} style={{background:"#1e293b",borderRadius:14,padding:"14px 16px",border:"1px solid #334155"}}>
@@ -1374,50 +1613,105 @@ function SettingsScreen({ devices, days, logs, timerSettings, setTimerSettings, 
         ))}
       </div>
 
+      {/* Timer Settings */}
       <div style={{...S.block,marginBottom:14}}>
-        <div style={{fontSize:15,fontWeight:800,color:"#f1f5f9",marginBottom:10}}>⏱ Rest Timer Settings</div>
-        <label style={S.lbl}>Rest between sets (minutes)</label>
+        <div style={{fontSize:15,fontWeight:800,color:"#f1f5f9",marginBottom:10}}>⏱ {t(language,"restTimerSettings")}</div>
+        <label style={S.lbl}>{t(language,"restBetweenSets")}</label>
         <input style={{...inp,marginBottom:10}} type="text" inputMode="decimal"
-          value={setRestInput}
-          placeholder="z. B. 1,5"
-          onChange={e=>setSetRestInput(e.target.value)}
-          onBlur={saveSetRest} />
-        <label style={S.lbl}>Rest between exercises (minutes)</label>
+          value={setRestInput} placeholder="e.g. 1.5"
+          onChange={e=>setSetRestInput(e.target.value)} onBlur={saveSetRest} />
+        <label style={S.lbl}>{t(language,"restBetweenExercises")}</label>
         <input style={inp} type="text" inputMode="decimal"
-          value={exerciseRestInput}
-          placeholder="z. B. 3 oder 1,5"
-          onChange={e=>setExerciseRestInput(e.target.value)}
-          onBlur={saveExerciseRest} />
-        <button style={{...S.btnPri,marginTop:10,background:"#059669"}} onClick={()=>{saveSetRest(); saveExerciseRest(); showMsg("✅ Timerzeiten gespeichert", true);}}>Save timer settings</button>
+          value={exerciseRestInput} placeholder="e.g. 3 or 1.5"
+          onChange={e=>setExerciseRestInput(e.target.value)} onBlur={saveExerciseRest} />
+        <button style={{...S.btnPri,marginTop:10,background:"#059669"}}
+          onClick={()=>{saveSetRest(); saveExerciseRest(); showMsg("✅ " + t(language,"timerSaved"), true);}}>
+          {t(language,"saveTimerSettings")}
+        </button>
         <div style={{fontSize:12,color:"#64748b",lineHeight:1.6,marginTop:10}}>
-          Default: 1.5 minutes after adding a new set, 3 minutes after saving an exercise. Use 0 to disable a timer.
-        </div>
-      </div>
-
-      <div style={{...S.block,marginBottom:14}}>
-        <div style={{fontSize:14,fontWeight:700,color:"#f1f5f9",marginBottom:6}}>💾 How your data is stored</div>
-        <div style={{fontSize:13,color:"#64748b",lineHeight:1.7}}>
-          Every change auto-saves locally on this iPhone/browser. No download or restore feature is shown in this version.
+          Default: 1.5 min after set, 3 min after exercise. Use 0 to disable.
         </div>
       </div>
 
       {msg&&<div style={{fontSize:13,padding:"10px 14px",borderRadius:10,marginBottom:14,
         background:msgOk?"#052e16":"#2d1515",color:msgOk?"#4ade80":"#f87171",fontWeight:600}}>{msg}</div>}
 
-      {/* Clear */}
+      {/* ── EXPORT ── */}
+      <div style={{...S.block,marginBottom:12}}>
+        <div style={{fontSize:15,fontWeight:700,color:"#f1f5f9",marginBottom:4}}>📤 {t(language,"exportBackup")}</div>
+        <div style={{fontSize:13,color:"#64748b",marginBottom:12}}>
+          {t(language,"settingsBackupText")}
+        </div>
+        <button style={{...S.btnPri,background:"#059669"}} onClick={doExport}>
+          ⬇️ {t(language,"downloadBackup")}
+        </button>
+        {exportJson && (
+          <div style={{marginTop:12}}>
+            <div style={{fontSize:13,color:"#fbbf24",marginBottom:6,fontWeight:600}}>
+              ⚠️ Download blocked — copy this text and save it as a .json file:
+            </div>
+            <textarea readOnly value={exportJson}
+              style={{width:"100%",boxSizing:"border-box",height:100,background:"#0f172a",
+                border:"1.5px solid #475569",borderRadius:10,color:"#94a3b8",
+                fontSize:11,padding:10,fontFamily:"monospace",resize:"vertical"}}
+              onClick={e=>e.target.select()} />
+            <button style={{...S.btnPri,background:"#475569",marginTop:6,fontSize:13}}
+              onClick={()=>{
+                navigator.clipboard?.writeText(exportJson)
+                  .then(()=>showMsg("✅ Copied to clipboard!", true))
+                  .catch(()=>showMsg("Select all text above and copy manually."));
+              }}>
+              📋 Copy to Clipboard
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ── IMPORT FILE ── */}
+      <div style={{...S.block,marginBottom:12}}>
+        <div style={{fontSize:15,fontWeight:700,color:"#f1f5f9",marginBottom:4}}>📥 {t(language,"restoreFile")}</div>
+        <div style={{fontSize:13,color:"#64748b",marginBottom:12}}>
+          {language==="de"?"Wähle eine zuvor exportierte .json Backup-Datei. Dadurch werden alle aktuellen Daten ersetzt.":"Choose a previously exported .json backup file. This replaces all current data."}
+        </div>
+        <label style={{display:"flex",alignItems:"center",justifyContent:"center",
+          background:"#1d4ed8",borderRadius:12,color:"#fff",fontSize:15,
+          fontWeight:700,padding:"14px",cursor:"pointer",fontFamily:"inherit"}}>
+          📂 {t(language,"chooseBackupFile")}
+          <input type="file" accept=".json,.txt" style={{display:"none"}} onChange={doImportFile} />
+        </label>
+      </div>
+
+      {/* ── IMPORT PASTE ── */}
+      <div style={{...S.block,marginBottom:12}}>
+        <div style={{fontSize:15,fontWeight:700,color:"#f1f5f9",marginBottom:4}}>📋 {t(language,"restorePaste")}</div>
+        <div style={{fontSize:13,color:"#64748b",marginBottom:10}}>
+          {language==="de"?"Füge hier deinen kopierten Backup-JSON-Text ein.":"Paste your previously copied backup JSON text here."}
+        </div>
+        <textarea value={pasteText} onChange={e=>setPasteText(e.target.value)}
+          placeholder={language==="de"?"Backup-JSON hier einfügen...":"Paste backup JSON here..."}
+          style={{width:"100%",boxSizing:"border-box",height:90,background:"#0f172a",
+            border:"1.5px solid #475569",borderRadius:10,color:"#f1f5f9",
+            fontSize:12,padding:10,fontFamily:"monospace",resize:"vertical",outline:"none",marginBottom:8}} />
+        <button style={{...S.btnPri,background:"#1d4ed8"}}
+          onClick={doImportPaste} disabled={!pasteText.trim()}>
+          {t(language,"restoreText")}
+        </button>
+      </div>
+
+      {/* ── CLEAR ── */}
       <div style={{...S.block,border:"1px solid #7f1d1d",marginBottom:24}}>
-        <div style={{fontSize:15,fontWeight:700,color:"#f87171",marginBottom:4}}>🗑️ Clear All Data</div>
-        <div style={{fontSize:13,color:"#64748b",marginBottom:12}}>Permanently delete everything from this local app.</div>
+        <div style={{fontSize:15,fontWeight:700,color:"#f87171",marginBottom:4}}>🗑️ {t(language,"clearAllData")}</div>
+        <div style={{fontSize:13,color:"#64748b",marginBottom:12}}>{language==="de"?"Alles dauerhaft löschen. Exportiere vorher ein Backup!":"Permanently delete everything. Export a backup first!"}</div>
         {confirmClear
           ?<div style={{display:"flex",gap:8}}>
-            <button style={{...S.btnSec,flex:1}} onClick={()=>setConfirmClear(false)}>Cancel</button>
+            <button style={{...S.btnSec,flex:1}} onClick={()=>setConfirmClear(false)}>{language==="de"?"Abbrechen":"Cancel"}</button>
             <button style={{...S.btnPri,background:"#dc2626",flex:1}}
-              onClick={()=>{onImport({devices:[],days:[],logs:[]});setConfirmClear(false);showMsg("All data cleared.");}}>
-              Yes, Delete All
+              onClick={()=>{onImport({devices:[],days:[],logs:[],groupPhotos:{}});setConfirmClear(false);showMsg(t(language,"allDataCleared"));}}>
+              {language==="de"?"Ja, alles löschen":"Yes, Delete All"}
             </button>
           </div>
           :<button style={{...S.btnPri,background:"#7f1d1d",color:"#fca5a5"}} onClick={()=>setConfirmClear(true)}>
-            Clear All Data
+            {t(language,"clearAllData")}
           </button>
         }
       </div>
@@ -1438,15 +1732,18 @@ function App() {
   const [logs, setLogsState] = useState([]);
   const [groupPhotos, setGroupPhotosState] = useState({});
   const [timerSettings, setTimerSettingsState] = useState({ setRestSeconds: 90, exerciseRestSeconds: 180 });
+  const [language, setLanguageState] = useState("en");
   const [session, setSession] = useState(null);
   const [confirm, setConfirm] = useState(null);
 
   useEffect(()=>{
     (async()=>{
-      const [d,dt,l,gp,ts]=await Promise.all([
-        loadData("gym-devices"), loadData("gym-day-templates"), loadData("gym-logs"), loadData("gym-group-photos"), loadData("gym-timer-settings"),
+      const [d,dt,l,gp,ts,lang]=await Promise.all([
+        loadData("gym-devices"), loadData("gym-day-templates"), loadData("gym-logs"), loadData("gym-group-photos"), loadData("gym-timer-settings"), loadData("gym-language"),
       ]);
-      const loadedDevices = withDefaultDevicePhotos(d);
+      const loadedLanguage = lang === "de" ? "de" : "en";
+      setLanguageState(loadedLanguage);
+      const loadedDevices = withDefaultDevicePhotos(d, loadedLanguage);
       setDevicesState(loadedDevices);
       saveData("gym-devices", loadedDevices);
       if (dt) setDayTemplatesState(uniqueCustomDays(dt));
@@ -1482,10 +1779,26 @@ function App() {
     saveData("gym-timer-settings",next); return next;
   });
 
+  const setLanguage = lang => {
+    const next = lang === "de" ? "de" : "en";
+    setLanguageState(next);
+    saveData("gym-language", next);
+    setDevicesState(prev => {
+      const updated = withDefaultDevicePhotos(prev, next);
+      saveData("gym-devices", updated);
+      return updated;
+    });
+  };
+
   const requestConfirm = (message,action) => setConfirm({message,action});
   const runConfirmed = () => { confirm?.action?.(); setConfirm(null); };
-  const handleImport = ({devices,days,logs})=>{
-    setDevices(devices); setDayTemplates(days); setLogs(logs);
+  const handleImport = ({devices,days,logs,groupPhotos: gp,timerSettings: ts,language: importedLanguage})=>{
+    const importLanguage = importedLanguage === "de" || importedLanguage === "en" ? importedLanguage : language;
+    setLanguageState(importLanguage);
+    saveData("gym-language", importLanguage);
+    setDevices(withDefaultDevicePhotos(devices, importLanguage)); setDayTemplates(days); setLogs(logs);
+    setGroupPhotos({...DEFAULT_GROUP_PHOTOS, ...(gp || {})});
+    if (ts) setTimerSettings(ts);
   };
 
   if (!ready) return <div style={{...S.phone,alignItems:"center",justifyContent:"center"}}>
@@ -1502,30 +1815,33 @@ function App() {
       <SessionScreen session={session} setSession={setSession}
         devices={devices} setDevices={setDevices}
         groupPhotos={groupPhotos}
-        logs={logs} setLogs={setLogs} timerSettings={timerSettings} onEnd={()=>setSession(null)} />
+        logs={logs} setLogs={setLogs} timerSettings={timerSettings} language={language} onEnd={()=>setSession(null)} />
       <ConfirmDialog confirm={confirm} onCancel={()=>setConfirm(null)} onConfirm={runConfirmed} />
     </div>
   );
 
   const NAV = [
-    {key:"days",    icon:Icons.calendar, label:"Days"},
-    {key:"devices", icon:Icons.dumbbell, label:"Devices"},
-    {key:"history", icon:Icons.trend,    label:"History"},
-    {key:"settings",icon:Icons.save,     label:"Settings"},
+    {key:"days",    icon:Icons.calendar, label:t(language,"days")},
+    {key:"devices", icon:Icons.dumbbell, label:t(language,"exercises")},
+    {key:"history", icon:Icons.trend,    label:t(language,"history")},
+    {key:"settings",icon:Icons.save,     label:t(language,"settings")},
   ];
 
   return (
     <div style={S.phone}>
       {tab==="days"     && <DaySetup dayTemplates={dayTemplates} setDayTemplates={setDayTemplates}
+          language={language}
           onStart={setSession}
-          onRequestDeleteDays={()=>requestConfirm("Are you sure you want to delete all saved day names? This cannot be undone.",()=>setDayTemplates([]))} />}
+          onRequestDeleteDays={()=>requestConfirm(t(language,"deleteDaysConfirm"),()=>setDayTemplates([]))} />}
       {tab==="devices"  && <DevicesScreen devices={devices} setDevices={setDevices}
+          language={language}
           groupPhotos={groupPhotos} setGroupPhotos={setGroupPhotos}
-          onRequestDeleteAll={()=>requestConfirm("Are you sure you want to delete all devices? This cannot be undone.",()=>setDevices([]))} />}
+          onRequestDeleteAll={()=>requestConfirm(t(language,"deleteExercisesConfirm"),()=>setDevices([]))} />}
       {tab==="history"  && <HistoryScreen logs={logs} devices={devices} setLogs={setLogs}
+          language={language}
           onResumeSession={setSession}
-          onRequestDeleteAll={()=>requestConfirm("Are you sure you want to delete all history logs? This cannot be undone.",()=>setLogs([]))} />}
-      {tab==="settings" && <SettingsScreen devices={devices} days={dayTemplates} logs={logs} timerSettings={timerSettings} setTimerSettings={setTimerSettings} onImport={handleImport} />}
+          onRequestDeleteAll={()=>requestConfirm(t(language,"deleteHistoryConfirm"),()=>setLogs([]))} />}
+      {tab==="settings" && <SettingsScreen devices={devices} days={dayTemplates} logs={logs} groupPhotos={groupPhotos} timerSettings={timerSettings} setTimerSettings={setTimerSettings} language={language} setLanguage={setLanguage} onImport={handleImport} />}
 
       <ConfirmDialog confirm={confirm} onCancel={()=>setConfirm(null)} onConfirm={runConfirmed} />
 
@@ -1559,6 +1875,7 @@ const S = {
   btnSec:  {flex:1,background:"#334155",border:"none",borderRadius:12,color:"#cbd5e1",fontWeight:700,fontSize:15,padding:"13px",cursor:"pointer",fontFamily:"inherit"},
   fab:     {position:"fixed",right:22,bottom:"calc(env(safe-area-inset-bottom, 0px) + 88px)",width:56,height:56,borderRadius:28,border:"none",background:"#1d4ed8",boxShadow:"0 6px 22px rgba(29,78,216,0.45)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",zIndex:10},
   pill:    {background:"#334155",borderRadius:8,color:"#94a3b8",fontSize:12,padding:"4px 9px"},
+  typeBadge:{display:"inline-flex",alignItems:"center",justifyContent:"center",borderRadius:999,fontSize:10,fontWeight:800,padding:"3px 7px",textTransform:"uppercase",letterSpacing:0.3},
   warn:    {display:"flex",alignItems:"center",gap:6,background:"#451a03",border:"1px solid #78350f",borderRadius:10,padding:"8px 12px",color:"#fbbf24",fontSize:13,fontWeight:600},
   backBtn: {display:"flex",alignItems:"center",gap:6,background:"none",border:"none",color:"#3b82f6",fontSize:15,cursor:"pointer",padding:0,fontFamily:"inherit",marginBottom:12,fontWeight:600},
   empty:   {color:"#475569",fontSize:15,textAlign:"center",padding:"40px 20px"},
