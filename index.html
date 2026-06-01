@@ -877,36 +877,68 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
   const [restNotice, setRestNotice] = useState(null);
   const [volumeNoticeGroups, setVolumeNoticeGroups] = useState([]);
 
+  const getRestRemaining = (timer) => {
+    if (!timer) return 0;
+    if (!timer.endAt) return Math.max(0, Number(timer.remaining) || 0);
+    return Math.max(0, Math.ceil((timer.endAt - Date.now()) / 1000));
+  };
+
+  const showRestOverNotice = (type) => {
+    const message = type === "set"
+      ? t(language,"setRestOver")
+      : t(language,"exerciseRestOver");
+    setRestNotice({ title: t(language,"restOver"), message });
+  };
+
   useEffect(() => {
     if (!restTimer) return;
-    if (restTimer.remaining <= 0) {
-      const message = restTimer.type === "set"
-        ? t(language,"setRestOver")
-        : t(language,"exerciseRestOver");
-      setRestTimer(null);
-      setRestNotice({ title: t(language,"restOver"), message });
-      return;
-    }
-    const id = setTimeout(() => {
-      setRestTimer(t => t ? {...t, remaining: t.remaining - 1} : null);
-    }, 1000);
-    return () => clearTimeout(id);
-  }, [restTimer]);
+    let active = true;
+    const syncTimer = () => {
+      if (!active) return;
+      const remaining = getRestRemaining(restTimer);
+      if (remaining <= 0) {
+        setRestTimer(null);
+        showRestOverNotice(restTimer.type);
+        return;
+      }
+      setRestTimer(timer => timer ? {...timer, remaining: getRestRemaining(timer)} : null);
+    };
+    syncTimer();
+    const id = setInterval(syncTimer, 1000);
+    const onVisible = () => {
+      if (!document.hidden) syncTimer();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", syncTimer);
+    window.addEventListener("pageshow", syncTimer);
+    return () => {
+      active = false;
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", syncTimer);
+      window.removeEventListener("pageshow", syncTimer);
+    };
+  }, [restTimer?.endAt, restTimer?.type, language]);
 
   const formatRestTime = (seconds) => `${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,"0")}`;
 
   const startRestTimer = (type) => {
     const seconds = type === "set" ? timerSettings.setRestSeconds : timerSettings.exerciseRestSeconds;
     if (!seconds || seconds <= 0) return;
-    setRestTimer({ type, remaining: seconds, total: seconds });
+    setRestTimer({ type, remaining: seconds, total: seconds, endAt: Date.now() + seconds * 1000 });
   };
 
   const openRestNotice = (action = null, payload = null) => {
-    if (!restTimer || restTimer.remaining <= 0) return false;
+    if (!restTimer) return false;
+    const remaining = getRestRemaining(restTimer);
+    if (remaining <= 0) {
+      setRestTimer(null);
+      return false;
+    }
     const restLabel = restTimer.type === "set" ? t(language,"setRest") : t(language,"exerciseRest");
     setRestNotice({
       title: t(language,"restRunning"),
-      message: `${restLabel} ${t(language,"restRunningMessage")}: ${formatRestTime(restTimer.remaining)}. ${t(language,"recoveryMessage")}`,
+      message: `${restLabel} ${t(language,"restRunningMessage")}: ${formatRestTime(remaining)}. ${t(language,"recoveryMessage")}`,
       action,
       payload
     });
@@ -1725,7 +1757,7 @@ function SettingsScreen({ devices, days, logs, groupPhotos, timerSettings, setTi
 // ═══════════════════════════════════════════════════════════════
 function App() {
   const [ready, setReady] = useState(false);
-  const [entered, setEntered] = useState(false);
+  const [entered, setEnteredState] = useState(false);
   const [tab, setTab] = useState("days");
   const [devices, setDevicesState] = useState([]);
   const [dayTemplates, setDayTemplatesState] = useState([]);
@@ -1738,8 +1770,8 @@ function App() {
 
   useEffect(()=>{
     (async()=>{
-      const [d,dt,l,gp,ts,lang]=await Promise.all([
-        loadData("gym-devices"), loadData("gym-day-templates"), loadData("gym-logs"), loadData("gym-group-photos"), loadData("gym-timer-settings"), loadData("gym-language"),
+      const [d,dt,l,gp,ts,lang,enteredSaved]=await Promise.all([
+        loadData("gym-devices"), loadData("gym-day-templates"), loadData("gym-logs"), loadData("gym-group-photos"), loadData("gym-timer-settings"), loadData("gym-language"), loadData("gym-entered"),
       ]);
       const loadedLanguage = lang === "de" ? "de" : "en";
       setLanguageState(loadedLanguage);
@@ -1750,9 +1782,15 @@ function App() {
       if (l) setLogsState(l);
       setGroupPhotosState({...DEFAULT_GROUP_PHOTOS, ...(gp || {})});
       if (ts) setTimerSettingsState({ setRestSeconds: Number(ts.setRestSeconds) || 90, exerciseRestSeconds: Number(ts.exerciseRestSeconds) || 180 });
+      setEnteredState(enteredSaved === true);
       setReady(true);
     })();
   },[]);
+
+  const setEntered = value => {
+    setEnteredState(value);
+    saveData("gym-entered", value);
+  };
 
   // Persisted setters
   const setDevices = updater => setDevicesState(prev=>{
