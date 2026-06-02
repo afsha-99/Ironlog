@@ -165,13 +165,29 @@ function ExitButton() {
 function AppExitButton({ onClick, language = "en" }) {
   return (
     <button onClick={onClick} style={{
-      position:"fixed",top:"calc(env(safe-area-inset-top, 0px) + 10px)",right:12,zIndex:550,
+      position:"fixed",right:18,bottom:"calc(env(safe-area-inset-bottom, 0px) + 96px)",zIndex:550,
       background:"#dc2626",color:"#fff",border:"2px solid #fecaca",borderRadius:999,
-      padding:"12px 18px",fontSize:15,fontWeight:950,letterSpacing:0.4,cursor:"pointer",
+      padding:"14px 20px",fontSize:16,fontWeight:950,letterSpacing:0.4,cursor:"pointer",
       fontFamily:"inherit",boxShadow:"0 10px 30px rgba(220,38,38,0.45)"
     }}>
       {t(language,"exit")}
     </button>
+  );
+}
+
+function LockerBadge({ lockerNumber, language = "en" }) {
+  if (!lockerNumber) return null;
+  return (
+    <div style={{
+      position:"fixed",top:"calc(env(safe-area-inset-top, 0px) + 10px)",left:12,zIndex:545,
+      border:"1px solid #f59e0b",background:"#1c1917",borderRadius:14,padding:"9px 13px",
+      boxShadow:"0 10px 30px rgba(0,0,0,0.35)",minWidth:96
+    }}>
+      <div style={{fontSize:10,color:"#fbbf24",fontWeight:900,textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>
+        {t(language,"lockerShort")}
+      </div>
+      <div style={{fontSize:21,fontWeight:900,color:"#f8fafc",letterSpacing:1}}>{lockerNumber}</div>
+    </div>
   );
 }
 
@@ -811,6 +827,7 @@ function PressableImage({ src, alt = "", style = {}, previewStyle = {} }) {
   };
   const startPress = event => {
     event.stopPropagation();
+    event.preventDefault();
     clearPress();
     setPressing(true);
     timerRef.current = setTimeout(() => {
@@ -822,6 +839,10 @@ function PressableImage({ src, alt = "", style = {}, previewStyle = {} }) {
     event.stopPropagation();
     clearPress();
   };
+  const blockClick = event => {
+    event.stopPropagation();
+    event.preventDefault();
+  };
 
   return (
     <>
@@ -830,11 +851,12 @@ function PressableImage({ src, alt = "", style = {}, previewStyle = {} }) {
         onPointerUp={stopPress}
         onPointerCancel={stopPress}
         onPointerLeave={stopPress}
+        onClick={blockClick}
         onContextMenu={e=>e.preventDefault()}
         style={{...style,transform:pressing?"scale(1.04)":"none",transition:"transform 0.12s ease",touchAction:"manipulation",WebkitTouchCallout:"none",userSelect:"none"}} />
-      {open && <div onClick={()=>setOpen(false)}
+      {open && <div onClick={e=>{e.stopPropagation();setOpen(false);}}
         style={{position:"fixed",inset:0,zIndex:600,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",padding:18}}>
-        <img src={src} alt={alt}
+        <img src={src} alt={alt} onClick={e=>e.stopPropagation()}
           style={{maxWidth:"100%",maxHeight:"86vh",borderRadius:16,objectFit:"contain",boxShadow:"0 22px 70px rgba(0,0,0,0.65)",...previewStyle}} />
       </div>}
     </>
@@ -1174,7 +1196,7 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
   const updateSet = (i,f,v) => setSets(prev=>prev.map((s,idx)=>idx===i?{...s,[f]:v}:s));
 
   return (
-    <div style={{...S.screen,padding:lockerNumber?"calc(env(safe-area-inset-top, 0px) + 82px) 16px calc(env(safe-area-inset-bottom, 0px) + 100px)":S.screen.padding}}>
+    <div style={S.screen}>
       {saveConfirmOpen && <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
         <div style={{width:"100%",maxWidth:360,background:"#1e293b",border:"1px solid #475569",borderRadius:18,padding:20}}>
           <h3 style={{margin:"0 0 8px",fontSize:20,color:"#fff"}}>{editingLog?t(language,"saveChangesQuestion"):t(language,"finishExercise")}</h3>
@@ -1187,17 +1209,6 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
           </div>
         </div>
       </div>}
-      {lockerNumber && <div style={{
-        position:"fixed",top:"calc(env(safe-area-inset-top, 0px) + 10px)",left:12,zIndex:545,
-        border:"1px solid #f59e0b",background:"#1c1917",borderRadius:14,padding:"9px 13px",
-        boxShadow:"0 10px 30px rgba(0,0,0,0.35)",minWidth:96
-      }}>
-        <div style={{fontSize:10,color:"#fbbf24",fontWeight:900,textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>
-          {t(language,"lockerShort")}
-        </div>
-        <div style={{fontSize:21,fontWeight:900,color:"#f8fafc",letterSpacing:1}}>{lockerNumber}</div>
-      </div>}
-
       <h2 style={S.title}>{displayDayName(session.dayName, language)}</h2>
 
       {restNotice && <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.72)",zIndex:350,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
@@ -2057,6 +2068,7 @@ function App() {
 
   if (session) return (
     <div style={S.phone}>
+      <LockerBadge lockerNumber={lockerNumber} language={language} />
       <AppExitButton language={language} onClick={requestExit} />
       <SessionScreen session={session} setSession={setSession}
         devices={devices} setDevices={setDevices}
@@ -2076,6 +2088,7 @@ function App() {
 
   return (
     <div style={S.phone}>
+      <LockerBadge lockerNumber={lockerNumber} language={language} />
       <AppExitButton language={language} onClick={requestExit} />
       {workoutEndNotice && <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.72)",zIndex:360,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
         <div style={{width:"100%",maxWidth:360,background:"#1e293b",border:"1px solid #f59e0b",borderRadius:18,padding:20,boxShadow:"0 10px 40px rgba(0,0,0,0.45)"}}>
@@ -2117,7 +2130,7 @@ function App() {
 // ═══════════════════════════════════════════════════════════════
 const S = {
   phone:   {maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"#0f172a",display:"flex",flexDirection:"column",fontFamily:"'SF Pro Display',-apple-system,BlinkMacSystemFont,sans-serif",color:"#e2e8f0"},
-  screen:  {padding:"calc(env(safe-area-inset-top, 0px) + 24px) 16px calc(env(safe-area-inset-bottom, 0px) + 100px)",overflowY:"auto"},
+  screen:  {padding:"calc(env(safe-area-inset-top, 0px) + 86px) 16px calc(env(safe-area-inset-bottom, 0px) + 168px)",overflowY:"auto"},
   title:   {fontSize:26,fontWeight:800,color:"#f8fafc",marginBottom:20,letterSpacing:-0.5},
   lbl:     {fontSize:12,color:"#94a3b8",fontWeight:700,display:"block",marginBottom:6,letterSpacing:0.5,textTransform:"uppercase"},
   block:   {background:"#1e293b",border:"1px solid #334155",borderRadius:16,padding:16,marginBottom:12},
@@ -2128,7 +2141,7 @@ const S = {
   iconBtn: {background:"none",border:"none",cursor:"pointer",padding:6},
   btnPri:  {display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",background:"#1d4ed8",border:"none",borderRadius:12,color:"#fff",fontWeight:800,fontSize:15,padding:"13px",cursor:"pointer",fontFamily:"inherit"},
   btnSec:  {flex:1,background:"#334155",border:"none",borderRadius:12,color:"#cbd5e1",fontWeight:700,fontSize:15,padding:"13px",cursor:"pointer",fontFamily:"inherit"},
-  fab:     {position:"fixed",right:22,bottom:"calc(env(safe-area-inset-bottom, 0px) + 88px)",width:56,height:56,borderRadius:28,border:"none",background:"#1d4ed8",boxShadow:"0 6px 22px rgba(29,78,216,0.45)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",zIndex:10},
+  fab:     {position:"fixed",right:22,bottom:"calc(env(safe-area-inset-bottom, 0px) + 158px)",width:56,height:56,borderRadius:28,border:"none",background:"#1d4ed8",boxShadow:"0 6px 22px rgba(29,78,216,0.45)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",zIndex:10},
   pill:    {background:"#334155",borderRadius:8,color:"#94a3b8",fontSize:12,padding:"4px 9px"},
   typeBadge:{display:"inline-flex",alignItems:"center",justifyContent:"center",borderRadius:999,fontSize:10,fontWeight:800,padding:"3px 7px",textTransform:"uppercase",letterSpacing:0.3},
   warn:    {display:"flex",alignItems:"center",gap:6,background:"#451a03",border:"1px solid #78350f",borderRadius:10,padding:"8px 12px",color:"#fbbf24",fontSize:13,fontWeight:600},
