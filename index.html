@@ -94,6 +94,11 @@ function formatDate(d) {
   return new Date(d).toLocaleDateString(undefined, { weekday:"short", day:"2-digit", month:"short", year:"numeric" });
 }
 
+function safeFilePart(text) {
+  return String(text || "training").trim().toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "training";
+}
+
 function cleanSets(sets) {
   return sets
     .filter(s => s.weight !== "" && s.reps !== "")
@@ -521,6 +526,7 @@ const I18N = {
     no:"No", yes:"Yes", saveChanges:"Save Changes", saveExercise:"Save Exercise", basic:"Basic", complement:"Complement",
     chooseFirstExercise:"Choose first exercise", addNextExercise:"Add next exercise", firstChooseGroup:"First choose a muscle group, then choose the exercise.",
     backToGroups:"Back to muscle groups", noExercises:"No exercises yet. Add your first one below.", noTagged:"No exercises tagged for this day yet.",
+    downloadAiBriefing:"Download AI briefing", aiBriefingHint:"Short text file for ChatGPT or another AI to read this training day.",
     addNewExercise:"Add new exercise", finishWorkout:"Finish Workout", endBack:"End / Back", savedToday:"Saved today",
     workoutEnded:"Workout finished", workoutEndedMessage:"You can still check your history and data. When you are completely done, press Exit.",
     finishExercise:"Finish this exercise?", saveLogNext:"Save this log and move to the next exercise?", yesSave:"Yes, save",
@@ -552,6 +558,7 @@ const I18N = {
     no:"Nein", yes:"Ja", saveChanges:"Änderungen speichern", saveExercise:"Übung speichern", basic:"Grundübung", complement:"Ergänzungsübung",
     chooseFirstExercise:"Erste Übung wählen", addNextExercise:"Nächste Übung hinzufügen", firstChooseGroup:"Wähle zuerst eine Muskelgruppe, dann die Übung.",
     backToGroups:"Zurück zu Muskelgruppen", noExercises:"Noch keine Übungen. Füge unten deine erste hinzu.", noTagged:"Für diesen Tag sind noch keine Übungen zugeordnet.",
+    downloadAiBriefing:"AI-Briefing herunterladen", aiBriefingHint:"Kurze Textdatei, damit ChatGPT oder eine andere AI diesen Trainingstag lesen kann.",
     addNewExercise:"Neue Übung hinzufügen", finishWorkout:"Workout beenden", endBack:"Beenden / Zurück", savedToday:"Heute gespeichert",
     workoutEnded:"Workout beendet", workoutEndedMessage:"Du kannst jetzt noch Verlauf und Daten anschauen. Wenn du komplett fertig bist, drücke Exit.",
     finishExercise:"Diese Übung abschließen?", saveLogNext:"Diesen Log speichern und zur nächsten Übung gehen?", yesSave:"Ja, speichern",
@@ -612,7 +619,7 @@ const DEFAULT_DEVICES = [
   { id:"default-brustdruecken-machine", name:"Machine Chest Press", muscle:"Chest", exerciseType:"basic", photo:"images/exercises/brustbankmachine.png", days:["Push Day","Whole Body","Chest"] },
   { id:"default-brustschraegbankdruecken-lh", name:"Incline Barbell Bench Press", muscle:"Chest", exerciseType:"basic", photo:"images/exercises/brustschraegbankdruecken-lh.jpg", days:["Push Day","Whole Body","Chest"] },
   { id:"default-trizeps-seil", name:"Cable Triceps Pushdown", muscle:"Triceps", exerciseType:"complement", photo:"images/exercises/Trizeps_seil_unten.png", days:["Push Day","Whole Body","Arms"] },
-  { id:"default-trizeps-dip-machine", name:"Machine Triceps Dip", muscle:"Triceps", exerciseType:"basic", photo:"images/exercises/trizeps_dipmachine.png", days:["Push Day","Whole Body","Arms"] },
+  { id:"default-trizeps-dip-machine", name:"Machine Triceps Dip", muscle:"Triceps", exerciseType:"basic", photo:"images/exercises/trizeps_dipmachine.png", days:["Push Day","Pull Day","Whole Body","Arms"] },
   { id:"default-flymachine", name:"Pec Deck Fly", muscle:"Chest", exerciseType:"complement", photo:"images/exercises/fly.png", days:["Push Day","Whole Body","Chest"] },
   { id:"default-fly-bank-kh", name:"Dumbbell Bench Fly", muscle:"Chest", exerciseType:"complement", photo:"images/exercises/fly_bank_kh.png", days:["Push Day","Whole Body","Chest"] },
   { id:"default-brust-kabel-unterbrust", name:"Low Cable Chest Fly", muscle:"Chest", exerciseType:"complement", photo:"images/exercises/brust_kabel_unterbrust.png", days:["Push Day","Whole Body","Chest"] },
@@ -789,6 +796,46 @@ function getSessionGroupStats(sessionLogs, devices, muscle) {
 
 function hasEnoughLargeGroupVolume(stats) {
   return (stats.basic >= 2 && stats.complement >= 1) || (stats.basic >= 1 && stats.complement >= 2);
+}
+
+function buildAiTrainingBriefing({ session, sessionLogs, devices, language = "en", lockerNumber = "" }) {
+  const logs = sessionLogs || [];
+  const totalSets = logs.reduce((sum, log) => sum + (log.sets?.length || 0), 0);
+  const totalVolume = logs.reduce((sum, log) =>
+    sum + (log.sets || []).reduce((a, s) => a + ((Number(s.weight) || 0) * (Number(s.reps) || 0)), 0), 0);
+  const lines = [
+    "IRONLOG AI TRAINING BRIEFING",
+    `Date: ${new Date(session.date).toISOString().slice(0,10)} (${formatDate(session.date)})`,
+    `Training day: ${displayDayName(session.dayName, language)}`,
+    lockerNumber ? `Locker: ${lockerNumber}` : null,
+    `Exercises completed: ${logs.length}`,
+    `Total sets: ${totalSets}`,
+    `Total volume: ${Math.round(totalVolume)} kg`,
+    "",
+    "Exercise details:"
+  ].filter(Boolean);
+
+  logs.forEach((log, index) => {
+    const device = devices.find(d => d.id === log.deviceId);
+    const stats = setStats(log.sets || []);
+    const setText = (log.sets || []).map((s, i) => `${i + 1}) ${s.weight}kg x ${s.reps}`).join("; ");
+    lines.push(`${index + 1}. ${device?.name || "Unknown exercise"} | Group: ${device?.muscle || "Unknown"} | Type: ${exerciseTypeLabel(device?.exerciseType, language)}`);
+    lines.push(`   Sets: ${setText}`);
+    lines.push(`   Best weight: ${stats.maxWeight}kg | Reps: ${stats.totalReps} | Volume: ${Math.round(stats.totalVolume)} kg`);
+  });
+
+  lines.push("");
+  lines.push("AI request: Briefly interpret this workout. Highlight what was trained, total workload, possible progression, and one concise suggestion for the next session.");
+  return lines.join("\n");
+}
+
+function downloadTextFile(filename, text) {
+  const a = document.createElement("a");
+  a.href = "data:text/plain;charset=utf-8," + encodeURIComponent(text);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 function getMuscleGroups(devices, groupPhotos = {}) {
@@ -1520,6 +1567,11 @@ function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSes
     ));
     setEditingSessionId(null); setEditSessionName("");
   };
+  const downloadSessionAiBriefing = s => {
+    const text = buildAiTrainingBriefing({ session: s, sessionLogs: s.logs, devices, language });
+    const fileDate = new Date(s.date).toISOString().slice(0,10);
+    downloadTextFile(`ironlog-briefing-${fileDate}-${safeFilePart(s.dayName)}.txt`, text);
+  };
 
   // Detail: session
   if (openedSession) return (
@@ -1555,6 +1607,10 @@ function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSes
         date: new Date(openedSession.date).toISOString().slice(0,10)
       })}>
         <Icon d={Icons.plus} size={16} color="#fff" /> {t(language,"addExerciseToDay")}
+      </button>
+      <button style={{...S.btnSec,width:"100%",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}
+        onClick={()=>downloadSessionAiBriefing(openedSession)}>
+        <Icon d={Icons.save} size={16} /> {t(language,"downloadAiBriefing")}
       </button>
       {openedSession.logs.map(log=>{
         const d=devices.find(x=>x.id===log.deviceId);
