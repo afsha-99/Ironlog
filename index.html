@@ -633,7 +633,7 @@ const I18N = {
     no:"No", yes:"Yes", saveChanges:"Save Changes", saveExercise:"Save Exercise", basic:"Basic", complement:"Complement",
     chooseFirstExercise:"Choose first exercise", addNextExercise:"Add next exercise", firstChooseGroup:"First choose a muscle group, then choose the exercise.",
     backToGroups:"Back to muscle groups", noExercises:"No exercises yet. Add your first one below.", noTagged:"No exercises tagged for this day yet.",
-    downloadAiBriefing:"Download AI briefing", aiBriefingHint:"Short text file for ChatGPT or another AI to read this training day.",
+    openAiBriefing:"Open AI briefing", downloadAiBriefing:"Download AI briefing", copyAiBriefing:"Copy briefing", shareAiBriefing:"Share briefing", close:"Close", copied:"Copied!", aiBriefingHint:"Short text file for ChatGPT or another AI to read this training day.",
     addNewExercise:"Add new exercise", finishWorkout:"Finish Workout", endBack:"End / Back", savedToday:"Saved today",
     workoutEnded:"Workout finished", workoutEndedMessage:"You can still check your history and data. When you are completely done, press Exit.",
     finishExercise:"Finish this exercise?", saveLogNext:"Save this log and move to the next exercise?", yesSave:"Yes, save",
@@ -665,7 +665,7 @@ const I18N = {
     no:"Nein", yes:"Ja", saveChanges:"Änderungen speichern", saveExercise:"Übung speichern", basic:"Grundübung", complement:"Ergänzungsübung",
     chooseFirstExercise:"Erste Übung wählen", addNextExercise:"Nächste Übung hinzufügen", firstChooseGroup:"Wähle zuerst eine Muskelgruppe, dann die Übung.",
     backToGroups:"Zurück zu Muskelgruppen", noExercises:"Noch keine Übungen. Füge unten deine erste hinzu.", noTagged:"Für diesen Tag sind noch keine Übungen zugeordnet.",
-    downloadAiBriefing:"AI-Briefing herunterladen", aiBriefingHint:"Kurze Textdatei, damit ChatGPT oder eine andere AI diesen Trainingstag lesen kann.",
+    openAiBriefing:"AI-Briefing öffnen", downloadAiBriefing:"AI-Briefing herunterladen", copyAiBriefing:"Briefing kopieren", shareAiBriefing:"Briefing teilen", close:"Schließen", copied:"Kopiert!", aiBriefingHint:"Kurze Textdatei, damit ChatGPT oder eine andere AI diesen Trainingstag lesen kann.",
     addNewExercise:"Neue Übung hinzufügen", finishWorkout:"Workout beenden", endBack:"Beenden / Zurück", savedToday:"Heute gespeichert",
     workoutEnded:"Workout beendet", workoutEndedMessage:"Du kannst jetzt noch Verlauf und Daten anschauen. Wenn du komplett fertig bist, drücke Exit.",
     finishExercise:"Diese Übung abschließen?", saveLogNext:"Diesen Log speichern und zur nächsten Übung gehen?", yesSave:"Ja, speichern",
@@ -981,12 +981,15 @@ function buildAiTrainingBriefing({ session, sessionLogs, devices, language = "en
 }
 
 function downloadTextFile(filename, text) {
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = "data:text/plain;charset=utf-8," + encodeURIComponent(text);
+  a.href = url;
   a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function getMuscleGroups(devices, groupPhotos = {}) {
@@ -1690,6 +1693,8 @@ function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSes
   const [editingSessionId, setEditingSessionId] = useState(null);
   const [editSessionName, setEditSessionName] = useState("");
   const [editSessionDate, setEditSessionDate] = useState(today());
+  const [aiBriefing, setAiBriefing] = useState(null);
+  const [aiBriefingCopied, setAiBriefingCopied] = useState(false);
 
   const sessions = getTrainingSessions(logs);
   const calendarCells = buildCalendarCells(calendarMonth);
@@ -1732,10 +1737,35 @@ function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSes
     ));
     setEditingSessionId(null); setEditSessionName("");
   };
-  const downloadSessionAiBriefing = s => {
+  const buildSessionAiBriefingFile = s => {
     const text = buildAiTrainingBriefing({ session: s, sessionLogs: s.logs, devices, language });
     const fileDate = new Date(s.date).toISOString().slice(0,10);
-    downloadTextFile(`ironlog-briefing-${fileDate}-${safeFilePart(s.dayName)}.txt`, text);
+    return {
+      filename:`ironlog-briefing-${fileDate}-${safeFilePart(s.dayName)}.txt`,
+      text,
+    };
+  };
+  const openSessionAiBriefing = s => {
+    setAiBriefing(buildSessionAiBriefingFile(s));
+    setAiBriefingCopied(false);
+  };
+  const copyAiBriefing = async () => {
+    if (!aiBriefing) return;
+    try {
+      await navigator.clipboard.writeText(aiBriefing.text);
+      setAiBriefingCopied(true);
+    } catch {
+      setAiBriefingCopied(false);
+    }
+  };
+  const shareAiBriefing = async () => {
+    if (!aiBriefing || !navigator.share) return;
+    try {
+      await navigator.share({ title: aiBriefing.filename, text: aiBriefing.text });
+    } catch {}
+  };
+  const downloadAiBriefingFile = () => {
+    if (aiBriefing) downloadTextFile(aiBriefing.filename, aiBriefing.text);
   };
   const changeCalendarMonth = offset => {
     setCalendarMonth(prev=>new Date(prev.getFullYear(),prev.getMonth()+offset,1));
@@ -1791,9 +1821,36 @@ function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSes
         <Icon d={Icons.plus} size={16} color="#fff" /> {t(language,"addExerciseToDay")}
       </button>
       <button style={{...S.btnSec,width:"100%",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}
-        onClick={()=>downloadSessionAiBriefing(openedSession)}>
-        <Icon d={Icons.save} size={16} /> {t(language,"downloadAiBriefing")}
+        onClick={()=>openSessionAiBriefing(openedSession)}>
+        <Icon d={Icons.save} size={16} /> {t(language,"openAiBriefing")}
       </button>
+      {aiBriefing && <div style={{position:"fixed",inset:0,zIndex:700,background:"rgba(2,6,23,0.88)",display:"flex",alignItems:"flex-end",justifyContent:"center",padding:"18px 14px calc(env(safe-area-inset-bottom, 0px) + 18px)"}}
+        onClick={()=>setAiBriefing(null)}>
+        <div style={{width:"100%",maxWidth:560,maxHeight:"82vh",background:"#0f172a",border:"1px solid #334155",borderRadius:16,padding:14,boxShadow:"0 24px 80px rgba(0,0,0,0.55)",display:"flex",flexDirection:"column",gap:10}}
+          onClick={e=>e.stopPropagation()}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+            <div style={{minWidth:0}}>
+              <div style={{fontSize:16,fontWeight:900,color:"#f8fafc"}}>{t(language,"openAiBriefing")}</div>
+              <div style={{fontSize:11,color:"#64748b",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{aiBriefing.filename}</div>
+            </div>
+            <button style={{...S.iconBtn,width:38,height:38,borderRadius:10,background:"#1e293b",border:"1px solid #334155"}} onClick={()=>setAiBriefing(null)}>×</button>
+          </div>
+          <textarea readOnly value={aiBriefing.text}
+            style={{width:"100%",boxSizing:"border-box",minHeight:220,maxHeight:"46vh",resize:"vertical",background:"#020617",border:"1px solid #334155",borderRadius:12,color:"#dbeafe",fontFamily:"ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",fontSize:12,lineHeight:1.45,padding:12}} />
+          <div style={{display:"grid",gridTemplateColumns:navigator.share?"1fr 1fr":"1fr",gap:8}}>
+            <button style={{...S.btnPri,background:"#059669"}} onClick={copyAiBriefing}>
+              <Icon d={Icons.save} size={15} color="#fff" /> {aiBriefingCopied ? t(language,"copied") : t(language,"copyAiBriefing")}
+            </button>
+            {navigator.share && <button style={{...S.btnSec,display:"flex",alignItems:"center",justifyContent:"center",gap:7}} onClick={shareAiBriefing}>
+              <Icon d={Icons.play} size={15} /> {t(language,"shareAiBriefing")}
+            </button>}
+          </div>
+          <button style={{...S.btnSec,width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:7}} onClick={downloadAiBriefingFile}>
+            <Icon d={Icons.save} size={15} /> {t(language,"downloadAiBriefing")}
+          </button>
+          <button style={{...S.btnSec,width:"100%",background:"#1e293b"}} onClick={()=>setAiBriefing(null)}>{t(language,"close")}</button>
+        </div>
+      </div>}
       {openedSession.logs.map(log=>{
         const d=devices.find(x=>x.id===log.deviceId);
         return <div key={log.id} style={S.block}>
