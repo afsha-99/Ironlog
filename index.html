@@ -67,6 +67,7 @@ const Icons = {
   edit:    "M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z",
   save:    "M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2zM17 21v-8H7v8M7 3v5h8",
   warning: "M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01",
+  list:    "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
 };
 
 
@@ -86,6 +87,142 @@ async function saveData(key, val) {
   try {
     localStorage.setItem(key, JSON.stringify(val));
   } catch {}
+}
+
+const BACKUP_LIMITS = {
+  bytes: 4 * 1024 * 1024,
+  devices: 500,
+  days: 100,
+  logs: 10000,
+  setsPerLog: 100,
+  groupPhotos: 500,
+  photoChars: 1500000,
+};
+
+function backupError(message) {
+  throw new Error(message);
+}
+
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function boundedString(value, label, maxLength, allowEmpty = false) {
+  if (typeof value !== "string") backupError(`${label} must be text.`);
+  const clean = value.trim();
+  if (!allowEmpty && !clean) backupError(`${label} is required.`);
+  if (clean.length > maxLength) backupError(`${label} is too long.`);
+  return clean;
+}
+
+function isAllowedPhotoSource(value) {
+  if (typeof value !== "string" || !value || value.length > BACKUP_LIMITS.photoChars) return false;
+  if (/^data:image\/(jpeg|png|webp|gif);base64,[a-z0-9+/=\s]+$/i.test(value)) return true;
+  return value.startsWith("images/exercises/") && !value.includes("..") && !value.includes("\\") && value.length <= 300;
+}
+
+function validateBackupPhoto(value, label) {
+  if (value === null || value === undefined || value === "") return null;
+  const photo = boundedString(value, label, BACKUP_LIMITS.photoChars);
+  if (isAllowedPhotoSource(photo)) return photo;
+  backupError(`${label} has an unsafe image source.`);
+}
+
+function validateBackupData(data) {
+  if (!isRecord(data)) backupError("Backup root must be an object.");
+  if (!Array.isArray(data.devices) || data.devices.length > BACKUP_LIMITS.devices) backupError("Invalid exercise list.");
+  if (!Array.isArray(data.days) || data.days.length > BACKUP_LIMITS.days) backupError("Invalid day list.");
+  if (!Array.isArray(data.logs) || data.logs.length > BACKUP_LIMITS.logs) backupError("Invalid log list.");
+
+  const deviceIds = new Set();
+  const devices = data.devices.map((device, index) => {
+    if (!isRecord(device)) backupError(`Exercise ${index + 1} is invalid.`);
+    const id = boundedString(device.id, `Exercise ${index + 1} ID`, 120);
+    if (deviceIds.has(id)) backupError("Duplicate exercise ID.");
+    deviceIds.add(id);
+    const days = device.days === undefined ? undefined : (() => {
+      if (!Array.isArray(device.days) || device.days.length > 30) backupError(`Exercise ${index + 1} has invalid days.`);
+      return device.days.map((day, dayIndex) => boundedString(day, `Exercise ${index + 1} day ${dayIndex + 1}`, 80));
+    })();
+    return {
+      id,
+      name: boundedString(device.name, `Exercise ${index + 1} name`, 120),
+      muscle: boundedString(device.muscle || "", `Exercise ${index + 1} muscle`, 80, true),
+      exerciseType: device.exerciseType === "basic" ? "basic" : "complement",
+      photo: validateBackupPhoto(device.photo, `Exercise ${index + 1} photo`),
+      ...(days ? {days} : {}),
+    };
+  });
+
+  const dayIds = new Set();
+  const days = data.days.map((day, index) => {
+    if (!isRecord(day)) backupError(`Day ${index + 1} is invalid.`);
+    const id = boundedString(day.id || `imported-day-${index + 1}`, `Day ${index + 1} ID`, 120);
+    if (dayIds.has(id)) backupError("Duplicate day ID.");
+    dayIds.add(id);
+    return { id, name:boundedString(day.name, `Day ${index + 1} name`, 80) };
+  });
+
+  const logIds = new Set();
+  const logs = data.logs.map((log, index) => {
+    if (!isRecord(log)) backupError(`Log ${index + 1} is invalid.`);
+    const id = boundedString(log.id || `imported-log-${index + 1}`, `Log ${index + 1} ID`, 120);
+    if (logIds.has(id)) backupError("Duplicate log ID.");
+    logIds.add(id);
+    const date = boundedString(log.date, `Log ${index + 1} date`, 40);
+    if (!Number.isFinite(new Date(date).getTime())) backupError(`Log ${index + 1} has an invalid date.`);
+    if (!Array.isArray(log.sets) || log.sets.length > BACKUP_LIMITS.setsPerLog) backupError(`Log ${index + 1} has invalid sets.`);
+    const sets = log.sets.map((set, setIndex) => {
+      if (!isRecord(set)) backupError(`Log ${index + 1}, set ${setIndex + 1} is invalid.`);
+      const weight = Number(set.weight);
+      const reps = Number(set.reps);
+      if (!Number.isFinite(weight) || weight < 0 || weight > 1000) backupError(`Log ${index + 1}, set ${setIndex + 1} has invalid weight.`);
+      if (!Number.isInteger(reps) || reps < 1 || reps > 10000) backupError(`Log ${index + 1}, set ${setIndex + 1} has invalid reps.`);
+      return {weight,reps};
+    });
+    return {
+      id,
+      deviceId:boundedString(log.deviceId, `Log ${index + 1} exercise ID`, 120),
+      dayName:boundedString(log.dayName, `Log ${index + 1} day`, 80),
+      date:new Date(date).toISOString(),
+      sets,
+      ...(log.sessionId === undefined ? {} : {sessionId:boundedString(log.sessionId, `Log ${index + 1} session ID`, 120)}),
+    };
+  });
+
+  const rawGroupPhotos = data.groupPhotos === undefined ? {} : data.groupPhotos;
+  if (!isRecord(rawGroupPhotos) || Object.keys(rawGroupPhotos).length > BACKUP_LIMITS.groupPhotos) backupError("Invalid group photos.");
+  const groupPhotos = {};
+  Object.entries(rawGroupPhotos).forEach(([key, photo]) => {
+    if (key === "__proto__" || key === "constructor" || key === "prototype") backupError("Unsafe group photo key.");
+    const cleanKey = boundedString(key, "Group photo key", 100);
+    groupPhotos[cleanKey] = validateBackupPhoto(photo, `Group photo ${cleanKey}`);
+  });
+
+  let timerSettings;
+  if (data.timerSettings !== undefined) {
+    if (!isRecord(data.timerSettings)) backupError("Invalid timer settings.");
+    const setRestSeconds = Number(data.timerSettings.setRestSeconds);
+    const exerciseRestSeconds = Number(data.timerSettings.exerciseRestSeconds);
+    if (!Number.isFinite(setRestSeconds) || setRestSeconds < 0 || setRestSeconds > 86400 ||
+        !Number.isFinite(exerciseRestSeconds) || exerciseRestSeconds < 0 || exerciseRestSeconds > 86400) backupError("Invalid timer duration.");
+    timerSettings = {setRestSeconds:Math.round(setRestSeconds),exerciseRestSeconds:Math.round(exerciseRestSeconds)};
+  }
+
+  return {
+    version:Number.isInteger(data.version) ? data.version : 1,
+    devices,
+    days,
+    logs,
+    groupPhotos,
+    ...(timerSettings ? {timerSettings} : {}),
+    ...(data.language === "de" || data.language === "en" ? {language:data.language} : {}),
+  };
+}
+
+function parseAndValidateBackup(text) {
+  if (typeof text !== "string" || new Blob([text]).size > BACKUP_LIMITS.bytes) backupError("Backup is too large.");
+  return validateBackupData(JSON.parse(text));
 }
 
 
@@ -333,17 +470,15 @@ function ImageCropper({ src, onCrop, onCancel }) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// PHOTO PICKER  (upload + paste + URL, all → crop)
+// PHOTO PICKER  (local upload or clipboard image → crop)
 // ═══════════════════════════════════════════════════════════════
 function PhotoPicker({ onPhoto, label = "Add Photo" }) {
   const [cropSrc, setCropSrc] = useState(null);
-  const [showUrl, setShowUrl] = useState(false);
-  const [url, setUrl] = useState("");
-  const [urlErr, setUrlErr] = useState("");
   const [pasteHint, setPasteHint] = useState("Click here, then Ctrl+V / ⌘+V to paste screenshot");
+  const allowedTypes = ["image/jpeg","image/png","image/webp","image/gif"];
 
   const handleFile = file => {
-    if (!file || !file.type.startsWith("image/")) return;
+    if (!file || !allowedTypes.includes(file.type)) return;
     const r = new FileReader();
     r.onload = ev => setCropSrc(ev.target.result);
     r.readAsDataURL(file);
@@ -353,7 +488,7 @@ function PhotoPicker({ onPhoto, label = "Add Photo" }) {
     try {
       const items = await navigator.clipboard.read();
       for (const item of items) {
-        const t = item.types.find(t => t.startsWith("image/"));
+        const t = item.types.find(t => allowedTypes.includes(t));
         if (t) { const blob = await item.getType(t); handleFile(blob); return; }
       }
       setPasteHint("No image found — copy a screenshot first.");
@@ -363,24 +498,16 @@ function PhotoPicker({ onPhoto, label = "Add Photo" }) {
   };
 
   const onPasteEvent = e => {
-    const item = Array.from(e.clipboardData?.items||[]).find(i=>i.type.startsWith("image/"));
+    const item = Array.from(e.clipboardData?.items||[]).find(i=>allowedTypes.includes(i.type));
     if (!item) { setPasteHint("No image found. Copy a screenshot first."); return; }
     handleFile(item.getAsFile());
     setPasteHint("Screenshot received ✅");
   };
 
-  const applyUrl = () => {
-    const t = url.trim(); if (!t) return;
-    const img = new Image(); img.crossOrigin="anonymous";
-    img.onload = () => setCropSrc(t);
-    img.onerror = () => setUrlErr("Could not load. Try a direct .jpg/.png link.");
-    img.src = t;
-  };
-
   return (
     <>
       {cropSrc && <ImageCropper src={cropSrc}
-        onCrop={d=>{ onPhoto(d); setCropSrc(null); setUrl(""); setShowUrl(false); }}
+        onCrop={d=>{ onPhoto(d); setCropSrc(null); }}
         onCancel={()=>setCropSrc(null)} />}
 
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
@@ -394,35 +521,15 @@ function PhotoPicker({ onPhoto, label = "Add Photo" }) {
         </div>
 
         <div style={{display:"flex",gap:8}}>
-          {/* Upload */}
-          <label style={{flex:2,display:"flex",alignItems:"center",justifyContent:"center",
+          <label style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",
             gap:7,background:"#1e293b",border:"1.5px dashed #475569",borderRadius:12,
             padding:"11px 10px",cursor:"pointer",color:"#cbd5e1",fontSize:14,
             fontWeight:600,fontFamily:"inherit"}}>
             <Icon d={Icons.camera} size={17} color="#94a3b8" /> {label}
-            <input type="file" accept="image/*" style={{display:"none"}}
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" style={{display:"none"}}
               onChange={e=>handleFile(e.target.files[0])} />
           </label>
-          {/* URL */}
-          <button style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",
-            gap:6,background:showUrl?"#1e3a8a":"#1e293b",
-            border:`1.5px dashed ${showUrl?"#3b82f6":"#475569"}`,
-            borderRadius:12,padding:"11px 8px",cursor:"pointer",
-            color:showUrl?"#93c5fd":"#cbd5e1",fontSize:14,fontWeight:600,fontFamily:"inherit"}}
-            onClick={()=>{setShowUrl(v=>!v);setUrlErr("");}}>
-            🔗 URL
-          </button>
         </div>
-
-        {showUrl && <div style={{display:"flex",flexDirection:"column",gap:6}}>
-          <input style={{...inp,borderColor:urlErr?"#ef4444":"#475569"}}
-            placeholder="Paste image URL…" value={url}
-            onChange={e=>{setUrl(e.target.value);setUrlErr("");}} />
-          {urlErr && <div style={{color:"#ef4444",fontSize:12}}>{urlErr}</div>}
-          <button style={{background:"#1d4ed8",border:"none",borderRadius:10,color:"#fff",
-            fontSize:14,fontWeight:600,padding:"11px",cursor:"pointer",fontFamily:"inherit"}}
-            onClick={applyUrl}>Use this image</button>
-        </div>}
       </div>
     </>
   );
@@ -537,7 +644,7 @@ const I18N = {
     volumeReached:"Sufficient training volume reached", volumeMessage:"You have reached sufficient training volume for", continueStrong:"You can press OK and continue if you still feel strong.",
     exercises:"Exercises", deleteAll:"Delete all", groupPhoto:"Group photo", photoForGroup:"Photo for this group", changeGroupPhoto:"Change Group Photo", addGroupPhoto:"Add Group Photo",
     removeGroupPhoto:"Remove group photo", noExercisesGroup:"No exercises in this group.", exercisesGrouped:"Your exercises are grouped by muscle group, so long lists stay easy to navigate.",
-    history:"History", days:"Days", settings:"Settings", noSessionsExercise:"No sessions logged yet for this exercise.", noSavedSessions:"No saved sessions yet.",
+    history:"History", days:"Days", settings:"Settings", listView:"List", calendarView:"Calendar", todayLabel:"Today", previousMonth:"Previous month", nextMonth:"Next month", moreSessions:"more", noSessionsExercise:"No sessions logged yet for this exercise.", noSavedSessions:"No saved sessions yet.",
     editTrainingDay:"Edit training day", addExerciseToDay:"Add exercise to this day", noMuscleGroup:"No muscle group",
     language:"Language", english:"English", german:"German", restTimerSettings:"Rest Timer Settings", restBetweenSets:"Rest between sets (minutes)",
     restBetweenExercises:"Rest between exercises (minutes)", saveTimerSettings:"Save timer settings", timerSaved:"Timer settings saved",
@@ -569,7 +676,7 @@ const I18N = {
     volumeReached:"Ausreichendes Trainingsvolumen erreicht", volumeMessage:"Du hast ausreichend Trainingsvolumen erreicht für", continueStrong:"Du kannst OK drücken und weitermachen, wenn du dich noch stark fühlst.",
     exercises:"Übungen", deleteAll:"Alle löschen", groupPhoto:"Gruppenfoto", photoForGroup:"Foto für diese Gruppe", changeGroupPhoto:"Gruppenfoto ändern", addGroupPhoto:"Gruppenfoto hinzufügen",
     removeGroupPhoto:"Gruppenfoto entfernen", noExercisesGroup:"Keine Übungen in dieser Gruppe.", exercisesGrouped:"Deine Übungen sind nach Muskelgruppen sortiert, damit lange Listen übersichtlich bleiben.",
-    history:"Verlauf", days:"Tage", settings:"Einstellungen", noSessionsExercise:"Für diese Übung gibt es noch keine Sessions.", noSavedSessions:"Noch keine gespeicherten Sessions.",
+    history:"Verlauf", days:"Tage", settings:"Einstellungen", listView:"Liste", calendarView:"Kalender", todayLabel:"Heute", previousMonth:"Vorheriger Monat", nextMonth:"Nächster Monat", moreSessions:"weitere", noSessionsExercise:"Für diese Übung gibt es noch keine Sessions.", noSavedSessions:"Noch keine gespeicherten Sessions.",
     editTrainingDay:"Trainingstag bearbeiten", addExerciseToDay:"Übung zu diesem Tag hinzufügen", noMuscleGroup:"Keine Muskelgruppe",
     language:"Sprache", english:"Englisch", german:"Deutsch", restTimerSettings:"Pausen-Timer", restBetweenSets:"Pause zwischen Sätzen (Minuten)",
     restBetweenExercises:"Pause zwischen Übungen (Minuten)", saveTimerSettings:"Timer speichern", timerSaved:"Timer gespeichert",
@@ -721,8 +828,8 @@ function withDefaultDevicePhotos(devices, language = "en") {
   const seen = new Set(devices.map(d => d.id));
   const updated = devices.map(d => {
     const def = defaultsById[d.id];
-    if (!def) return { ...d, exerciseType: d.exerciseType || "complement" };
-    const manualPhoto = typeof d.photo === "string" && d.photo.startsWith("data:");
+    if (!def) return { ...d, exerciseType: d.exerciseType || "complement", photo:isAllowedPhotoSource(d.photo) ? d.photo : null };
+    const manualPhoto = isAllowedPhotoSource(d.photo) && d.photo.startsWith("data:image/");
     const localized = localizedDefaultDevice(def, language);
     return { ...d, name: localized.name, muscle: localized.muscle, exerciseType: def.exerciseType, photo: manualPhoto ? d.photo : def.photo, days: def.days };
   });
@@ -730,6 +837,16 @@ function withDefaultDevicePhotos(devices, language = "en") {
     if (!seen.has(d.id)) updated.push(localizedDefaultDevice(d, language));
   });
   return updated;
+}
+
+function sanitizeStoredGroupPhotos(value) {
+  if (!isRecord(value)) return {};
+  const clean = {};
+  Object.entries(value).forEach(([key, photo]) => {
+    if (key === "__proto__" || key === "constructor" || key === "prototype") return;
+    if (typeof key === "string" && key.length <= 100 && isAllowedPhotoSource(photo)) clean[key] = photo;
+  });
+  return clean;
 }
 
 function dayKey(name) {
@@ -775,6 +892,40 @@ function getTrainingSessions(logs = []) {
       return acc;
     }, {})
   ).sort((a,b)=>new Date(b.date)-new Date(a.date));
+}
+
+function calendarDateKey(value) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) return `${match[1]}-${match[2]}-${match[3]}`;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+}
+
+function calendarSessionMeta(dayName, language = "en") {
+  const key = dayKey(dayName);
+  if (key === dayKey("Push Day")) return { label:"PUSH", color:"#fb7185", background:"#4c0519" };
+  if (key === dayKey("Pull Day")) return { label:"PULL", color:"#67e8f9", background:"#083344" };
+  if (key === dayKey("Leg Day")) return { label:language==="de"?"BEIN":"LEG", color:"#bef264", background:"#1a2e05" };
+  if (key === dayKey("Whole Body")) return { label:language==="de"?"GANZ":"FULL", color:"#fbbf24", background:"#451a03" };
+  const shown = displayDayName(dayName, language).trim();
+  return { label:(shown.split(/\s+/)[0] || "DAY").slice(0,6).toUpperCase(), color:"#c4b5fd", background:"#2e1065" };
+}
+
+function buildCalendarCells(monthDate) {
+  const year = monthDate.getFullYear();
+  const month = monthDate.getMonth();
+  const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cellCount = Math.ceil((firstWeekday + daysInMonth) / 7) * 7;
+  return Array.from({length:cellCount}, (_, index) => {
+    const day = index - firstWeekday + 1;
+    if (day < 1 || day > daysInMonth) return null;
+    return {
+      day,
+      key:`${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`
+    };
+  });
 }
 
 function isLargeSuggestionGroup(muscle) {
@@ -1531,6 +1682,9 @@ function DevicesScreen({ devices, setDevices, groupPhotos, setGroupPhotos, onReq
 // ═══════════════════════════════════════════════════════════════
 function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSession, language }) {
   const [view, setView] = useState("days");
+  const [historyLayout, setHistoryLayout] = useState("list");
+  const [calendarMonth, setCalendarMonth] = useState(()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),1);});
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState("");
   const [openSessionId, setOpenSessionId] = useState(null);
   const [openDeviceId, setOpenDeviceId] = useState(null);
   const [editingSessionId, setEditingSessionId] = useState(null);
@@ -1538,6 +1692,17 @@ function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSes
   const [editSessionDate, setEditSessionDate] = useState(today());
 
   const sessions = getTrainingSessions(logs);
+  const calendarCells = buildCalendarCells(calendarMonth);
+  const sessionsByDate = sessions.reduce((acc, session) => {
+    const key = calendarDateKey(session.date);
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(session);
+    return acc;
+  }, {});
+  const selectedCalendarSessions = sessionsByDate[selectedCalendarDate] || [];
+  const weekdayLabels = language === "de" ? ["Mo","Di","Mi","Do","Fr","Sa","So"] : ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  const monthLabel = new Intl.DateTimeFormat(language === "de" ? "de-DE" : "en-US", {month:"long",year:"numeric"}).format(calendarMonth);
+  const currentDateKey = calendarDateKey(new Date());
 
   const openedSession = sessions.find(s=>s.id===openSessionId);
   const openedDevice = devices.find(d=>d.id===openDeviceId);
@@ -1571,6 +1736,23 @@ function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSes
     const text = buildAiTrainingBriefing({ session: s, sessionLogs: s.logs, devices, language });
     const fileDate = new Date(s.date).toISOString().slice(0,10);
     downloadTextFile(`ironlog-briefing-${fileDate}-${safeFilePart(s.dayName)}.txt`, text);
+  };
+  const changeCalendarMonth = offset => {
+    setCalendarMonth(prev=>new Date(prev.getFullYear(),prev.getMonth()+offset,1));
+    setSelectedCalendarDate("");
+  };
+  const showCurrentMonth = () => {
+    const now = new Date();
+    setCalendarMonth(new Date(now.getFullYear(),now.getMonth(),1));
+    setSelectedCalendarDate("");
+  };
+  const openCalendarDate = (key, daySessions) => {
+    if (!daySessions.length) return;
+    if (daySessions.length === 1) {
+      setOpenSessionId(daySessions[0].id);
+      return;
+    }
+    setSelectedCalendarDate(key);
   };
 
   // Detail: session
@@ -1666,7 +1848,22 @@ function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSes
         <h2 style={{...S.title,margin:0}}>{t(language,"history")}</h2>
         <button style={S.dangerSmall} onClick={onRequestDeleteAll}>{t(language,"deleteAll")}</button>
       </div>
-      {/* Segment */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,
+        background:"#020617",border:"1px solid #334155",borderRadius:14,padding:6,marginBottom:14}}>
+        {[
+          {key:"list",label:t(language,"listView"),icon:Icons.list},
+          {key:"calendar",label:t(language,"calendarView"),icon:Icons.calendar}
+        ].map(item=>(
+          <button key={item.key} style={{border:"none",borderRadius:10,padding:11,fontWeight:800,cursor:"pointer",
+            background:historyLayout===item.key?"#1d4ed8":"transparent",color:historyLayout===item.key?"#fff":"#94a3b8",fontFamily:"inherit",
+            fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:7}}
+            onClick={()=>setHistoryLayout(item.key)}>
+            <Icon d={item.icon} size={17} color="currentColor" /> {item.label}
+          </button>
+        ))}
+      </div>
+
+      {historyLayout==="list"&&<>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,
         background:"#020617",border:"1px solid #334155",borderRadius:14,padding:6,marginBottom:14}}>
         {["days","devices"].map(k=>(
@@ -1736,6 +1933,73 @@ function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSes
           );
         })}
       </>}
+      </>}
+
+      {historyLayout==="calendar"&&<>
+        <div style={{...S.block,padding:12}}>
+          <div style={{display:"grid",gridTemplateColumns:"40px 1fr 40px",alignItems:"center",gap:8,marginBottom:10}}>
+            <button title={t(language,"previousMonth")} aria-label={t(language,"previousMonth")}
+              style={{...S.iconBtn,width:40,height:40,borderRadius:10,background:"#0f172a",border:"1px solid #334155",display:"flex",alignItems:"center",justifyContent:"center"}}
+              onClick={()=>changeCalendarMonth(-1)}>
+              <Icon d={Icons.back} size={18} color="#cbd5e1" />
+            </button>
+            <div style={{textAlign:"center",minWidth:0}}>
+              <div style={{fontSize:17,fontWeight:800,color:"#f8fafc",textTransform:"capitalize"}}>{monthLabel}</div>
+              <button style={{background:"none",border:"none",color:"#60a5fa",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",padding:"4px 8px"}}
+                onClick={showCurrentMonth}>{t(language,"todayLabel")}</button>
+            </div>
+            <button title={t(language,"nextMonth")} aria-label={t(language,"nextMonth")}
+              style={{...S.iconBtn,width:40,height:40,borderRadius:10,background:"#0f172a",border:"1px solid #334155",display:"flex",alignItems:"center",justifyContent:"center"}}
+              onClick={()=>changeCalendarMonth(1)}>
+              <span style={{display:"flex",transform:"rotate(180deg)"}}><Icon d={Icons.back} size={18} color="#cbd5e1" /></span>
+            </button>
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",gap:4,marginBottom:4}}>
+            {weekdayLabels.map(label=><div key={label} style={{height:24,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,color:"#64748b"}}>{label}</div>)}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",gap:4}}>
+            {calendarCells.map((cell,index)=>{
+              if (!cell) return <div key={`empty-${index}`} style={{height:72,borderRadius:8,background:"#111827"}} />;
+              const daySessions = sessionsByDate[cell.key] || [];
+              const selected = selectedCalendarDate === cell.key;
+              const isToday = currentDateKey === cell.key;
+              return <div key={cell.key} role={daySessions.length?"button":undefined} tabIndex={daySessions.length?0:undefined}
+                onClick={()=>openCalendarDate(cell.key,daySessions)}
+                onKeyDown={e=>{if(daySessions.length&&(e.key==="Enter"||e.key===" "))openCalendarDate(cell.key,daySessions);}}
+                style={{height:72,minWidth:0,borderRadius:8,padding:5,overflow:"hidden",cursor:daySessions.length?"pointer":"default",
+                  background:selected?"#172554":"#0f172a",border:isToday?"1px solid #3b82f6":selected?"1px solid #60a5fa":"1px solid #1e293b"}}>
+                <div style={{fontSize:11,fontWeight:isToday?900:700,color:isToday?"#60a5fa":"#94a3b8",marginBottom:4}}>{cell.day}</div>
+                <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                  {daySessions.slice(0,2).map(s=>{
+                    const meta=calendarSessionMeta(s.dayName,language);
+                    return <span key={s.id} style={{display:"block",width:"100%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",
+                      borderRadius:4,padding:"2px 3px",fontSize:8,fontWeight:900,lineHeight:1.2,color:meta.color,background:meta.background}}>{meta.label}</span>;
+                  })}
+                  {daySessions.length>2&&<span style={{fontSize:8,fontWeight:800,color:"#94a3b8"}}>+{daySessions.length-2}</span>}
+                </div>
+              </div>;
+            })}
+          </div>
+        </div>
+
+        {selectedCalendarSessions.length>1&&<div style={S.block}>
+          <div style={{fontSize:14,fontWeight:800,color:"#f1f5f9",marginBottom:10}}>{formatDate(selectedCalendarDate)}</div>
+          {selectedCalendarSessions.map(s=>{
+            const meta=calendarSessionMeta(s.dayName,language);
+            const setCount=s.logs.reduce((sum,log)=>sum+(log.sets?.length||0),0);
+            return <button key={s.id} onClick={()=>setOpenSessionId(s.id)} style={{width:"100%",background:"#0f172a",border:"1px solid #334155",borderRadius:8,
+              padding:10,marginBottom:8,color:"#e2e8f0",fontFamily:"inherit",cursor:"pointer",display:"flex",alignItems:"center",gap:10,textAlign:"left"}}>
+              <span style={{borderRadius:5,padding:"4px 6px",fontSize:10,fontWeight:900,color:meta.color,background:meta.background}}>{meta.label}</span>
+              <span style={{flex:1,minWidth:0}}>
+                <span style={{display:"block",fontSize:13,fontWeight:800}}>{displayDayName(s.dayName,language)}</span>
+                <span style={{display:"block",fontSize:11,color:"#64748b",marginTop:2}}>{s.logs.length} {language==="de"?"Übungen":"exercises"} · {setCount} {language==="de"?"Sätze":"sets"}</span>
+              </span>
+              <Icon d={Icons.play} size={15} color="#60a5fa" />
+            </button>;
+          })}
+        </div>}
+      </>}
     </div>
   );
 }
@@ -1796,14 +2060,18 @@ function SettingsScreen({ devices, days, logs, groupPhotos, timerSettings, setTi
 
   const doImportFile = e => {
     const file = e.target.files[0]; if (!file) return;
+    if (file.size > BACKUP_LIMITS.bytes) {
+      showMsg(language==="de"?"❌ Backup ist zu groß (maximal 4 MB).":"❌ Backup is too large (maximum 4 MB)." );
+      e.target.value = "";
+      return;
+    }
     const reader = new FileReader();
     reader.onload = ev => {
       try {
-        const data = JSON.parse(ev.target.result);
-        if (!data.devices || !data.days || !data.logs) throw new Error("Invalid");
+        const data = parseAndValidateBackup(ev.target.result);
         onImport(data);
         showMsg(`✅ Restored: ${data.devices.length} ${t(language,"exercises").toLowerCase()}, ${data.days.length} ${t(language,"days").toLowerCase()}, ${data.logs.length} sessions.`, true);
-      } catch { showMsg("❌ Invalid backup file."); }
+      } catch { showMsg(language==="de"?"❌ Ungültige oder unsichere Backup-Datei.":"❌ Invalid or unsafe backup file."); }
     };
     reader.readAsText(file);
     e.target.value = "";
@@ -1811,12 +2079,11 @@ function SettingsScreen({ devices, days, logs, groupPhotos, timerSettings, setTi
 
   const doImportPaste = () => {
     try {
-      const data = JSON.parse(pasteText.trim());
-      if (!data.devices || !data.days || !data.logs) throw new Error("Invalid");
+      const data = parseAndValidateBackup(pasteText.trim());
       onImport(data);
       setPasteText("");
       showMsg(`✅ Restored: ${data.devices.length} ${t(language,"exercises").toLowerCase()}, ${data.days.length} ${t(language,"days").toLowerCase()}, ${data.logs.length} sessions.`, true);
-    } catch { showMsg("❌ Invalid JSON. Copy the full backup text."); }
+    } catch { showMsg(language==="de"?"❌ Ungültiger oder unsicherer Backup-Text.":"❌ Invalid or unsafe backup text."); }
   };
 
   const allSessions = getTrainingSessions(logs);
@@ -1974,7 +2241,7 @@ function SettingsScreen({ devices, days, logs, groupPhotos, timerSettings, setTi
         <div style={{fontSize:13,color:"#64748b",marginBottom:10}}>
           {language==="de"?"Füge hier deinen kopierten Backup-JSON-Text ein.":"Paste your previously copied backup JSON text here."}
         </div>
-        <textarea value={pasteText} onChange={e=>setPasteText(e.target.value)}
+        <textarea value={pasteText} maxLength={BACKUP_LIMITS.bytes} onChange={e=>setPasteText(e.target.value)}
           placeholder={language==="de"?"Backup-JSON hier einfügen...":"Paste backup JSON here..."}
           style={{width:"100%",boxSizing:"border-box",height:90,background:"#0f172a",
             border:"1.5px solid #475569",borderRadius:10,color:"#f1f5f9",
@@ -2037,7 +2304,7 @@ function App() {
       saveData("gym-devices", loadedDevices);
       if (dt) setDayTemplatesState(uniqueCustomDays(dt));
       if (l) setLogsState(l);
-      setGroupPhotosState({...DEFAULT_GROUP_PHOTOS, ...(gp || {})});
+      setGroupPhotosState({...DEFAULT_GROUP_PHOTOS, ...sanitizeStoredGroupPhotos(gp)});
       if (ts) setTimerSettingsState({ setRestSeconds: Number(ts.setRestSeconds) || 90, exerciseRestSeconds: Number(ts.exerciseRestSeconds) || 180 });
       setEnteredState(enteredSaved === true);
       setLockerNumberState(typeof lockerSaved === "string" ? lockerSaved : "");
@@ -2117,7 +2384,7 @@ function App() {
     setLanguageState(importLanguage);
     saveData("gym-language", importLanguage);
     setDevices(withDefaultDevicePhotos(devices, importLanguage)); setDayTemplates(days); setLogs(logs);
-    setGroupPhotos({...DEFAULT_GROUP_PHOTOS, ...(gp || {})});
+    setGroupPhotos({...DEFAULT_GROUP_PHOTOS, ...sanitizeStoredGroupPhotos(gp)});
     if (ts) setTimerSettings(ts);
   };
 
@@ -2225,7 +2492,7 @@ root.render(React.createElement(App));
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(() => {
+        navigator.serviceWorker.register('sw.js').catch(() => {
           // sw.js optional - app works without it
         });
       });

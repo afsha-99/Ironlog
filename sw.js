@@ -1,9 +1,9 @@
 // Iron Log Service Worker - Offline Cache
-const CACHE_NAME = 'ironlog-v13';
+const CACHE_NAME = 'ironlog-v15';
 const URLS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/manifest.json',
+  './',
+  './index.html',
+  './manifest.json',
   'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js'
@@ -29,16 +29,37 @@ self.addEventListener('activate', event => {
 
 // Fetch: serve from cache, fallback to network
 self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return;
+  const requestUrl = new URL(event.request.url);
+  const appScope = self.registration.scope;
+  const allowedUrls = URLS_TO_CACHE.map(url => new URL(url, appScope).href);
+  const isLocalAppRequest = requestUrl.href.startsWith(appScope);
+  const isFixedDependency = allowedUrls.includes(requestUrl.href);
+  if (!isLocalAppRequest && !isFixedDependency) return;
+
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).then(response => {
+        if (response && response.status === 200) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put('./index.html', clone));
+        }
+        return response;
+      }).catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached;
       return fetch(event.request).then(response => {
-        if (response && response.status === 200) {
+        if (response && response.status === 200 && (isLocalAppRequest || isFixedDependency)) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         }
         return response;
-      }).catch(() => caches.match('/index.html'));
+      }).catch(() => Response.error());
     })
   );
 });
