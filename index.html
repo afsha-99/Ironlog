@@ -605,11 +605,8 @@ function DeviceForm({ initial, onSave, onCancel, language = "en" }) {
 // LAST LOGS (shown inside session)
 // ═══════════════════════════════════════════════════════════════
 function LastLogs({ logs, deviceId, dayName, language = "en" }) {
-  const sameDay = [...logs].filter(l=>l.deviceId===deviceId&&l.dayName===dayName)
+  const show = [...logs].filter(l=>l.deviceId===deviceId)
     .sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
-  const any = [...logs].filter(l=>l.deviceId===deviceId)
-    .sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
-  const show = sameDay || any;
   if (!show) return <div style={{color:"#64748b",fontSize:13,padding:"8px 0"}}>{language==="de"?"Kein früherer Log für diese Übung.":"No previous log for this exercise."}</div>;
   return (
     <div style={{background:"#0f172a",borderRadius:10,padding:"10px 12px",margin:"10px 0"}}>
