@@ -337,6 +337,15 @@ function formatSetSummary(set, language = "en") {
   return `${set.weight}kg × ${set.reps}`;
 }
 
+function setHasInput(set = {}) {
+  return ["weight","reps","leftWeight","leftReps","rightWeight","rightReps"]
+    .some(key => String(set[key] ?? "").trim() !== "");
+}
+
+function setsHaveInput(sets = []) {
+  return Array.isArray(sets) && sets.some(setHasInput);
+}
+
 function setStats(sets = []) {
   return {
     maxWeight: Math.max(0, ...sets.flatMap(setWeightValues)),
@@ -344,36 +353,6 @@ function setStats(sets = []) {
     totalSets: sets.length,
     totalVolume: sets.reduce((a, s) => a + setVolume(s), 0),
   };
-}
-
-function getProgressWarning(logs, deviceId) {
-  // Only used for small warning icons in history. The real popup is triggered after saving.
-  const rel = logs.filter(l => l.deviceId === deviceId)
-    .sort((a,b) => new Date(b.date)-new Date(a.date));
-  if (rel.length < 2) return false;
-  return getProgressWarningForLog(rel.slice(1), rel[0]);
-}
-
-function getProgressWarningForLog(logs, currentLog) {
-  const previous = logs
-    .filter(l => l.deviceId === currentLog.deviceId && l.id !== currentLog.id)
-    .sort((a,b) => new Date(b.date)-new Date(a.date))[0];
-
-  if (!previous) return false;
-
-  const diffDays = Math.abs((new Date(currentLog.date) - new Date(previous.date)) / (1000 * 60 * 60 * 24));
-  if (diffDays > 14) return false;
-
-  const current = setStats(currentLog.sets);
-  const old = setStats(previous.sets);
-
-  const improved =
-    current.totalVolume > old.totalVolume ||
-    current.maxWeight > old.maxWeight ||
-    current.totalReps > old.totalReps ||
-    current.totalSets > old.totalSets;
-
-  return !improved;
 }
 
 function exitIronLog() {
@@ -740,6 +719,8 @@ const I18N = {
     backToGroups:"Back to muscle groups", noExercises:"No exercises yet. Add your first one below.", noTagged:"No exercises tagged for this day yet.",
     openAiBriefing:"Open AI briefing", downloadAiBriefing:"Download AI briefing", copyAiBriefing:"Copy briefing", shareAiBriefing:"Share briefing", close:"Close", copied:"Copied!", aiBriefingHint:"Short text file for ChatGPT or another AI to read this training day.",
     addNewExercise:"Add new exercise", finishWorkout:"Finish Workout", endBack:"End / Back", savedToday:"Saved today",
+    openDraftsTitle:"Open exercises", openDraftsMessage:"Some exercises have unsaved sets. Save or discard them before finishing this workout.",
+    saveOpenDrafts:"Save open exercises", discardOpenDrafts:"Discard open exercises", openDraft:"Open", incompleteDraft:"Incomplete",
     workoutEnded:"Workout finished", workoutEndedMessage:"You can still check your history and data. When you are completely done, press Exit.",
     finishExercise:"Finish this exercise?", saveLogNext:"Save this log and move to the next exercise?", yesSave:"Yes, save",
     saveChangesQuestion:"Save changes?", updateExerciseLog:"Do you want to update this exercise log?", logSets:"Log sets", editSets:"Edit sets",
@@ -772,6 +753,8 @@ const I18N = {
     backToGroups:"Zurück zu Muskelgruppen", noExercises:"Noch keine Übungen. Füge unten deine erste hinzu.", noTagged:"Für diesen Tag sind noch keine Übungen zugeordnet.",
     openAiBriefing:"AI-Briefing öffnen", downloadAiBriefing:"AI-Briefing herunterladen", copyAiBriefing:"Briefing kopieren", shareAiBriefing:"Briefing teilen", close:"Schließen", copied:"Kopiert!", aiBriefingHint:"Kurze Textdatei, damit ChatGPT oder eine andere AI diesen Trainingstag lesen kann.",
     addNewExercise:"Neue Übung hinzufügen", finishWorkout:"Workout beenden", endBack:"Beenden / Zurück", savedToday:"Heute gespeichert",
+    openDraftsTitle:"Offene Übungen", openDraftsMessage:"Einige Übungen haben ungespeicherte Sätze. Speichern oder verwerfen, bevor du das Workout beendest.",
+    saveOpenDrafts:"Offene Übungen speichern", discardOpenDrafts:"Offene Übungen verwerfen", openDraft:"Offen", incompleteDraft:"Unvollständig",
     workoutEnded:"Workout beendet", workoutEndedMessage:"Du kannst jetzt noch Verlauf und Daten anschauen. Wenn du komplett fertig bist, drücke Exit.",
     finishExercise:"Diese Übung abschließen?", saveLogNext:"Diesen Log speichern und zur nächsten Übung gehen?", yesSave:"Ja, speichern",
     saveChangesQuestion:"Änderungen speichern?", updateExerciseLog:"Möchtest du diesen Übungslog aktualisieren?", logSets:"Sätze eintragen", editSets:"Sätze bearbeiten",
@@ -832,8 +815,11 @@ const DEFAULT_DEVICES = [
   { id:"default-brustschraegbankdruecken-lh", name:"Incline Barbell Bench Press", muscle:"Chest", exerciseType:"basic", photo:"images/exercises/brustschraegbankdruecken-lh.jpg", days:["Push Day","Whole Body","Chest"] },
   { id:"default-schraegbankdruecken-kh", name:"Incline Dumbbell Press", muscle:"Chest", exerciseType:"basic", tracking:"perSide", photo:"images/exercises/schraegbankdruecken_kh.png", days:["Push Day","Whole Body","Chest"] },
   { id:"default-brust-dip", name:"Chest Dip", muscle:"Chest", exerciseType:"complement", photo:"images/exercises/Brust_dip.png", days:["Push Day","Whole Body","Chest"] },
+  { id:"default-liegestuetze", name:"Push-Up", muscle:"Chest", exerciseType:"basic", photo:"images/exercises/liegestütze.png", days:["Push Day","Whole Body","Chest"] },
   { id:"default-trizeps-seil", name:"Cable Triceps Pushdown", muscle:"Triceps", exerciseType:"complement", photo:"images/exercises/Trizeps_seil_unten.png", days:["Push Day","Whole Body","Arms"] },
   { id:"default-trizeps-kabel-onehand", name:"One-Arm Cable Triceps Pushdown", muscle:"Triceps", exerciseType:"complement", tracking:"perSide", photo:"images/exercises/trizep_kabel_onehand.png", days:["Push Day","Whole Body","Arms"] },
+  { id:"default-trizeps-upperhead", name:"Overhead Triceps Extension", muscle:"Triceps", exerciseType:"complement", photo:"images/exercises/Trizeps_upperhead.png", days:["Push Day","Whole Body","Arms"] },
+  { id:"default-trizeps-kh-onehand", name:"One-Arm Dumbbell Triceps Extension", muscle:"Triceps", exerciseType:"complement", tracking:"perSide", photo:"images/exercises/trizeps_kh_onehand.png", days:["Push Day","Whole Body","Arms"] },
   { id:"default-trizeps-dip-machine", name:"Machine Triceps Dip", muscle:"Triceps", exerciseType:"basic", photo:"images/exercises/trizeps_dipmachine.png", days:["Push Day","Pull Day","Whole Body","Arms"] },
   { id:"default-flymachine", name:"Pec Deck Fly", muscle:"Chest", exerciseType:"complement", photo:"images/exercises/fly.png", days:["Push Day","Whole Body","Chest"] },
   { id:"default-fly-bank-kh", name:"Dumbbell Bench Fly", muscle:"Chest", exerciseType:"complement", photo:"images/exercises/fly_bank_kh.png", days:["Push Day","Whole Body","Chest"] },
@@ -845,6 +831,7 @@ const DEFAULT_DEVICES = [
   { id:"default-seitenheben-kabelzug", name:"Cable Lateral Raise", muscle:"Shoulders", exerciseType:"complement", photo:"images/exercises/Seitenheben_kabelzug.png", days:["Push Day","Whole Body","Shoulders"] },
   { id:"default-schulterdruecken-vorne-kh", name:"Front Dumbbell Shoulder Press", muscle:"Shoulders", exerciseType:"complement", tracking:"perSide", photo:"images/exercises/schulterheben_vorne.png", days:["Push Day","Whole Body","Arms","Shoulders"] },
   { id:"default-trizeps-kh", name:"Dumbbell Triceps Extension", muscle:"Triceps", exerciseType:"complement", tracking:"perSide", photo:"images/exercises/trizeps_kh.png", days:["Push Day","Whole Body","Arms"] },
+  { id:"default-klimmzuege", name:"Pull-Up", muscle:"Back", exerciseType:"basic", photo:"images/exercises/Klimmzüge.png", days:["Pull Day","Whole Body","Back"] },
   { id:"default-latzug-kabel", name:"Cable Lat Pulldown", muscle:"Back", exerciseType:"basic", photo:"images/exercises/Latzug_kabel.png", days:["Pull Day","Whole Body","Back"] },
   { id:"default-latzug-machine", name:"Machine Lat Pulldown", muscle:"Back", exerciseType:"basic", photo:"images/exercises/latzug_machine.png", days:["Pull Day","Whole Body","Back"] },
   { id:"default-rudern-kabelzug", name:"Cable Row", muscle:"Back", exerciseType:"basic", photo:"images/exercises/rudern_kabelzug.png", days:["Pull Day","Whole Body","Back"] },
@@ -884,8 +871,11 @@ const DEFAULT_DEVICE_DE = {
   "default-brustschraegbankdruecken-lh": { name:"Schrägbankdrücken Langhantel", muscle:"Brust" },
   "default-schraegbankdruecken-kh": { name:"Schrägbankdrücken Kurzhantel", muscle:"Brust" },
   "default-brust-dip": { name:"Brust-Dip", muscle:"Brust" },
+  "default-liegestuetze": { name:"Liegestütze", muscle:"Brust" },
   "default-trizeps-seil": { name:"Trizepsdrücken am Kabel", muscle:"Trizeps" },
   "default-trizeps-kabel-onehand": { name:"Einarmiges Trizepsdrücken am Kabel", muscle:"Trizeps" },
+  "default-trizeps-upperhead": { name:"Trizepsdrücken über Kopf", muscle:"Trizeps" },
+  "default-trizeps-kh-onehand": { name:"Einarmiges Trizepsstrecken Kurzhantel", muscle:"Trizeps" },
   "default-trizeps-dip-machine": { name:"Trizeps-Dip Maschine", muscle:"Trizeps" },
   "default-flymachine": { name:"Butterfly Maschine", muscle:"Brust" },
   "default-fly-bank-kh": { name:"Kurzhantel Flys auf der Bank", muscle:"Brust" },
@@ -897,6 +887,7 @@ const DEFAULT_DEVICE_DE = {
   "default-seitenheben-kabelzug": { name:"Seitheben am Kabelzug", muscle:"Schultern" },
   "default-schulterdruecken-vorne-kh": { name:"Front-Schulterdrücken Kurzhantel", muscle:"Schultern" },
   "default-trizeps-kh": { name:"Trizepsstrecken Kurzhantel", muscle:"Trizeps" },
+  "default-klimmzuege": { name:"Klimmzüge", muscle:"Rücken" },
   "default-latzug-kabel": { name:"Latzug am Kabel", muscle:"Rücken" },
   "default-latzug-machine": { name:"Latzug Maschine", muscle:"Rücken" },
   "default-rudern-kabelzug": { name:"Rudern am Kabelzug", muscle:"Rücken" },
@@ -1332,10 +1323,24 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
     const draft = readStoredData(SESSION_DRAFT_KEY);
     return draft?.sessionId === session.id ? draft : null;
   })();
+  const initialExerciseDrafts = (() => {
+    const source = isRecord(initialDraft?.exerciseDrafts) ? initialDraft.exerciseDrafts : {};
+    const drafts = Object.entries(source).reduce((acc, [deviceId, draft]) => {
+      if (Array.isArray(draft?.sets) && setsHaveInput(draft.sets)) acc[deviceId] = draft;
+      return acc;
+    }, {});
+    if (initialDraft?.activeId && Array.isArray(initialDraft?.sets) && setsHaveInput(initialDraft.sets)) {
+      drafts[initialDraft.activeId] = { sets: initialDraft.sets, updatedAt: initialDraft.updatedAt };
+    }
+    return drafts;
+  })();
+  const initialActiveDevice = devices.find(d => d.id === initialDraft?.activeId);
+  const initialActiveDraftSets = initialDraft?.activeId ? initialExerciseDrafts[initialDraft.activeId]?.sets : null;
   const [activeId, setActiveId] = useState(initialDraft?.activeId || null);
   const [sets, setSets] = useState(Array.isArray(initialDraft?.sets) && initialDraft.sets.length
-    ? initialDraft.sets.map(s => setToFormSet(s, s?.mode === "perSide" || s?.leftWeight !== undefined || s?.rightWeight !== undefined))
+    ? (initialActiveDraftSets || initialDraft.sets).map(s => setToFormSet(s, deviceUsesPerSide(initialActiveDevice) || s?.mode === "perSide" || s?.leftWeight !== undefined || s?.rightWeight !== undefined))
     : [{weight:"",reps:""}]);
+  const [exerciseDrafts, setExerciseDrafts] = useState(initialExerciseDrafts);
   const [addingDevice, setAddingDevice] = useState(initialDraft?.addingDevice === true);
   const [doneIds, setDoneIds] = useState([]);
   const [showChooser, setShowChooser] = useState(initialDraft ? initialDraft.showChooser !== false : true);
@@ -1344,6 +1349,7 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
   const [selectedGroup, setSelectedGroup] = useState(initialDraft?.selectedGroup || null);
   const [restTimer, setRestTimer] = useState(initialDraft?.restTimer || null);
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
+  const [finishDrafts, setFinishDrafts] = useState(null);
   const [restNotice, setRestNotice] = useState(null);
   const [volumeNoticeGroups, setVolumeNoticeGroups] = useState([]);
 
@@ -1355,11 +1361,12 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
       addingDevice,
       showChooser,
       editingLogId: editingLog?.id || null,
+      exerciseDrafts,
       selectedGroup,
       restTimer,
       updatedAt: new Date().toISOString()
     });
-  }, [session.id, activeId, sets, addingDevice, showChooser, editingLog?.id, selectedGroup, restTimer]);
+  }, [session.id, activeId, sets, addingDevice, showChooser, editingLog?.id, exerciseDrafts, selectedGroup, restTimer]);
 
   const getRestRemaining = (timer) => {
     if (!timer) return 0;
@@ -1445,7 +1452,6 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
   const active = devices.find(d=>d.id===activeId);
   const todaysLogs = logs.filter(l=>l.sessionId===session.id);
   const sessionDoneIds = [...new Set([...doneIds, ...todaysLogs.map(l=>l.deviceId)])];
-  const warn = activeId ? getProgressWarning(logs.filter(l=>l.id!==editingLog?.id), activeId) : false;
   const dayDevices = devices.filter(d => deviceMatchesDay(d, session.dayName));
   const groups = getMuscleGroups(dayDevices, groupPhotos);
   const currentGroup = selectedGroup ? groups.find(g => g.key === selectedGroup) : null;
@@ -1457,11 +1463,41 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
     return currentGroupStats.basic >= 1 && !hasEnoughLargeGroupVolume(currentGroupStats);
   };
 
+  const upsertExerciseDraft = (deviceId, formSets, sourceDevice = null) => {
+    if (!deviceId || editingLog) return;
+    setExerciseDrafts(prev => {
+      const next = {...prev};
+      if (setsHaveInput(formSets)) {
+        next[deviceId] = {
+          sets:formSets.map(s=>setToFormSet(s, deviceUsesPerSide(sourceDevice))),
+          updatedAt:new Date().toISOString()
+        };
+      } else {
+        delete next[deviceId];
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (!activeId || editingLog) return;
+    upsertExerciseDraft(activeId, sets, active);
+  }, [activeId, sets, editingLog?.id]);
+
+  const draftForDevice = device => {
+    const draft = exerciseDrafts[device.id];
+    return Array.isArray(draft?.sets) && setsHaveInput(draft.sets)
+      ? draft.sets.map(s=>setToFormSet(s, deviceUsesPerSide(device)))
+      : null;
+  };
+
   const doChooseDevice = id => {
+    upsertExerciseDraft(activeId, sets, active);
     const selectedDevice = devices.find(d => d.id === id);
+    const savedDraft = selectedDevice ? draftForDevice(selectedDevice) : null;
     setShowChooser(false); setAddingDevice(false);
     setActiveId(id); setEditingLog(null);
-    setSets([emptySetForDevice(selectedDevice)]);
+    setSets(savedDraft || [emptySetForDevice(selectedDevice)]);
   };
 
   const chooseDevice = id => {
@@ -1514,6 +1550,11 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
       }
     }
 
+    setExerciseDrafts(prev => {
+      const next = {...prev};
+      delete next[activeId];
+      return next;
+    });
     setSets([{weight:"",reps:""}]);
     setActiveId(null);
     setAddingDevice(false);
@@ -1523,6 +1564,7 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
   };
 
   const chooseForEdit = log => {
+    upsertExerciseDraft(activeId, sets, active);
     const logDevice = devices.find(d => d.id === log.deviceId);
     setEditingLog(log); setShowChooser(false); setAddingDevice(false);
     setActiveId(log.deviceId);
@@ -1530,6 +1572,7 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
   };
 
   const addNewDevice = data => {
+    upsertExerciseDraft(activeId, sets, active);
     openRestNotice();
     const d = {id:uid(),...data};
     setDevices(prev=>[...prev,d]);
@@ -1538,6 +1581,62 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
   };
 
   const updateSet = (i,f,v) => setSets(prev=>prev.map((s,idx)=>idx===i?{...s,[f]:v}:s));
+
+  const getPendingDraftEntries = () => {
+    const merged = {...exerciseDrafts};
+    if (activeId && !editingLog && setsHaveInput(sets)) {
+      merged[activeId] = { sets:sets.map(s=>setToFormSet(s, deviceUsesPerSide(active))), updatedAt:new Date().toISOString() };
+    }
+    return Object.entries(merged).map(([deviceId, draft]) => {
+      const device = devices.find(d => d.id === deviceId);
+      const formSets = Array.isArray(draft?.sets)
+        ? draft.sets.map(s=>setToFormSet(s, deviceUsesPerSide(device)))
+        : [];
+      const cleaned = cleanSets(formSets, deviceUsesPerSide(device));
+      return { deviceId, device, sets:formSets, cleaned, valid:cleaned.length > 0 };
+    }).filter(entry => setsHaveInput(entry.sets));
+  };
+
+  const clearExerciseDrafts = () => {
+    setExerciseDrafts({});
+    setActiveId(null);
+    setEditingLog(null);
+    setSets([{weight:"",reps:""}]);
+    setShowChooser(true);
+  };
+
+  const handleFinishWorkout = () => {
+    const pending = getPendingDraftEntries();
+    if (pending.length) {
+      setFinishDrafts(pending);
+      return;
+    }
+    onFinish();
+  };
+
+  const discardOpenDrafts = () => {
+    clearExerciseDrafts();
+    setFinishDrafts(null);
+    onFinish();
+  };
+
+  const saveOpenDrafts = () => {
+    const pending = finishDrafts || [];
+    if (!pending.length || pending.some(entry => !entry.valid)) return;
+    const date = new Date(session.date).toISOString();
+    const newLogs = pending.map(entry => ({
+      id:uid(),
+      deviceId:entry.deviceId,
+      dayName:session.dayName,
+      date,
+      sets:entry.cleaned,
+      sessionId:session.id
+    }));
+    setLogs(prev=>[...prev,...newLogs]);
+    clearExerciseDrafts();
+    setFinishDrafts(null);
+    onFinish();
+  };
 
   return (
     <div style={S.screen}>
@@ -1550,6 +1649,36 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
           <div style={{display:"flex",gap:8}}>
             <button style={{flex:1,background:"#334155",border:"none",borderRadius:12,color:"#cbd5e1",fontWeight:700,padding:13,cursor:"pointer",fontFamily:"inherit"}} onClick={()=>setSaveConfirmOpen(false)}>{t(language,"no")}</button>
             <button style={{flex:1,background:"#1d4ed8",border:"none",borderRadius:12,color:"#fff",fontWeight:800,padding:13,cursor:"pointer",fontFamily:"inherit"}} onClick={performSaveDevice}>{t(language,"yesSave")}</button>
+          </div>
+        </div>
+      </div>}
+      {finishDrafts && <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.78)",zIndex:320,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{width:"100%",maxWidth:380,background:"#1e293b",border:"1px solid #475569",borderRadius:18,padding:20}}>
+          <h3 style={{margin:"0 0 8px",fontSize:20,color:"#fff"}}>{t(language,"openDraftsTitle")}</h3>
+          <p style={{color:"#cbd5e1",margin:"0 0 14px",lineHeight:1.5,fontSize:14}}>{t(language,"openDraftsMessage")}</p>
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
+            {finishDrafts.map(entry=>(
+              <div key={entry.deviceId} style={{background:"#0f172a",border:"1px solid #334155",borderRadius:10,padding:10}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:6}}>
+                  <span style={{fontSize:14,fontWeight:800,color:"#e2e8f0"}}>{entry.device?.name || "Unknown"}</span>
+                  <span style={{fontSize:11,fontWeight:900,color:entry.valid?"#86efac":"#fca5a5",background:entry.valid?"#052e16":"#450a0a",borderRadius:20,padding:"3px 7px"}}>
+                    {entry.valid ? t(language,"openDraft") : t(language,"incompleteDraft")}
+                  </span>
+                </div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                  {entry.sets.filter(setHasInput).map((s,i)=><span key={i} style={S.pill}>{formatSetSummary(s, language)}</span>)}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <button style={{...S.btnPri,background:finishDrafts.some(entry=>!entry.valid)?"#475569":"#059669",cursor:finishDrafts.some(entry=>!entry.valid)?"not-allowed":"pointer"}}
+              disabled={finishDrafts.some(entry=>!entry.valid)}
+              onClick={saveOpenDrafts}>
+              {t(language,"saveOpenDrafts")}
+            </button>
+            <button style={{...S.btnSec,width:"100%",background:"#7f1d1d",color:"#fca5a5"}} onClick={discardOpenDrafts}>{t(language,"discardOpenDrafts")}</button>
+            <button style={{...S.btnSec,width:"100%"}} onClick={()=>setFinishDrafts(null)}>{language==="de"?"Abbrechen":"Cancel"}</button>
           </div>
         </div>
       </div>}
@@ -1621,6 +1750,7 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
             {filteredDevices.map(d=>{
               const suggested = shouldSuggestComplement(d);
+              const hasDraft = Boolean(draftForDevice(d));
               return (
                 <button key={d.id} style={{background:suggested?"#172554":"#0f172a",border:suggested?"1px solid #60a5fa":"1px solid #334155",borderRadius:14,
                   color:"#e2e8f0",padding:10,cursor:"pointer",display:"flex",flexDirection:"column",
@@ -1639,6 +1769,9 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
                   {sessionDoneIds.includes(d.id)&&<span style={{position:"absolute",top:6,right:6,
                     background:"#22c55e",borderRadius:20,fontSize:10,fontWeight:800,
                     color:"#fff",padding:"2px 6px"}}>✓</span>}
+                  {hasDraft&&!sessionDoneIds.includes(d.id)&&<span style={{position:"absolute",top:6,right:6,
+                    background:"#f59e0b",borderRadius:20,fontSize:10,fontWeight:900,
+                    color:"#111827",padding:"2px 6px"}}>{t(language,"openDraft")}</span>}
                 </button>
               );
             })}
@@ -1650,7 +1783,7 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
           onClick={()=>{setAddingDevice(true);setShowChooser(false);}}>
           <Icon d={Icons.plus} size={16} /> {t(language,"addNewExercise")}
         </button>
-        <button style={S.btnPri} onClick={onFinish}>
+        <button style={S.btnPri} onClick={handleFinishWorkout}>
           <Icon d={Icons.check} size={16} color="#fff" /> {t(language,"finishWorkout")}
         </button>
       </div>}
@@ -1672,8 +1805,6 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
             </div>
           </div>
         </div>
-
-        {warn && <div style={S.warn}><Icon d={Icons.warning} size={15} color="#fbbf24" /> Same weight 2 weeks — time to raise! 💪</div>}
 
         <LastLogs language={language} logs={logs.filter(l=>l.id!==editingLog?.id)} deviceId={active.id} dayName={session.dayName} />
 
@@ -1740,7 +1871,7 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
           + {t(language,"addNextSet")}
         </button>
         <div style={{display:"flex",gap:8}}>
-          <button style={{...S.btnSec,flex:1}} onClick={()=>{setActiveId(null);setEditingLog(null);setSets([emptySetForDevice(active)]);setShowChooser(true);}}>
+          <button style={{...S.btnSec,flex:1}} onClick={()=>{upsertExerciseDraft(activeId, sets, active); setActiveId(null);setEditingLog(null);setSets([emptySetForDevice(active)]);setShowChooser(true);}}>
             ← Back
           </button>
           <button style={{...S.btnPri,flex:2}} onClick={saveDevice}>
@@ -2058,9 +2189,6 @@ function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSes
           <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
             {log.sets.map((s,i)=><span key={i} style={S.pill}>{formatSetSummary(s, language)}</span>)}
           </div>
-          {getProgressWarning(logs,log.deviceId)&&<div style={{...S.warn,marginTop:8}}>
-            <Icon d={Icons.warning} size={13} color="#fbbf24" /> Same weight 2 weeks — time to raise!
-          </div>}
         </div>
       ))}
     </div>
@@ -2133,7 +2261,6 @@ function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSes
         {devices.length===0&&<div style={S.empty}>{language==="de"?"Noch keine Übungen.":"No exercises yet."}</div>}
         {devices.map(d=>{
           const count=logs.filter(l=>l.deviceId===d.id).length;
-          const warn=getProgressWarning(logs,d.id);
           return (
             <button key={d.id} style={{width:"100%",background:"#1e293b",color:"#e2e8f0",
               border:"1px solid #334155",borderRadius:14,padding:14,marginBottom:10,
@@ -2150,7 +2277,6 @@ function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSes
                 </div>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:6}}>
-                {warn&&<Icon d={Icons.warning} size={16} color="#fbbf24" />}
                 <Icon d={Icons.play} size={16} color="#60a5fa" />
               </div>
             </button>
@@ -2713,7 +2839,6 @@ const S = {
   fab:     {position:"fixed",right:22,bottom:"calc(env(safe-area-inset-bottom, 0px) + 158px)",width:56,height:56,borderRadius:28,border:"none",background:"#1d4ed8",boxShadow:"0 6px 22px rgba(29,78,216,0.45)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",zIndex:10},
   pill:    {background:"#334155",borderRadius:8,color:"#94a3b8",fontSize:12,padding:"4px 9px"},
   typeBadge:{display:"inline-flex",alignItems:"center",justifyContent:"center",borderRadius:999,fontSize:10,fontWeight:800,padding:"3px 7px",textTransform:"uppercase",letterSpacing:0.3},
-  warn:    {display:"flex",alignItems:"center",gap:6,background:"#451a03",border:"1px solid #78350f",borderRadius:10,padding:"8px 12px",color:"#fbbf24",fontSize:13,fontWeight:600},
   backBtn: {display:"flex",alignItems:"center",gap:6,background:"none",border:"none",color:"#3b82f6",fontSize:15,cursor:"pointer",padding:0,fontFamily:"inherit",marginBottom:12,fontWeight:600},
   empty:   {color:"#475569",fontSize:15,textAlign:"center",padding:"40px 20px"},
   dangerSmall:{background:"#450a0a",color:"#fecaca",border:"1px solid #7f1d1d",borderRadius:10,padding:"8px 12px",fontSize:12,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"},
