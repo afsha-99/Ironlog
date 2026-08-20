@@ -737,6 +737,7 @@ const I18N = {
     exportBackup:"Export Backup", downloadBackup:"Download Backup", restoreFile:"Restore from File", restorePaste:"Restore from Paste",
     chooseBackupFile:"Choose Backup File", restoreText:"Restore from Text", clearAllData:"Clear All Data", allDataCleared:"All data cleared.",
     settingsBackupText:"Download all your exercises, photos, days and logs as a .json file. Save it to iCloud Drive / Files for safety.",
+    volumeProgress:"Volume progress", latestVolume:"Latest volume", bestVolume:"Best volume", averageVolume:"Average volume", noProgressData:"Log this exercise at least once to see progress here.", shown:"shown", condensed:"condensed",
     pleaseChoose:"Please choose an exercise first.", pleaseSet:"Please enter at least one valid set with weight and reps.",
     deleteExercisesConfirm:"Are you sure you want to delete all exercises? This cannot be undone.",
     deleteDaysConfirm:"Are you sure you want to delete all saved day names? This cannot be undone.",
@@ -771,6 +772,7 @@ const I18N = {
     exportBackup:"Backup exportieren", downloadBackup:"Backup herunterladen", restoreFile:"Aus Datei wiederherstellen", restorePaste:"Aus Text wiederherstellen",
     chooseBackupFile:"Backup-Datei wählen", restoreText:"Aus Text wiederherstellen", clearAllData:"Alle Daten löschen", allDataCleared:"Alle Daten gelöscht.",
     settingsBackupText:"Lade Übungen, Fotos, Tage und Logs als .json Datei herunter. Speichere sie sicher in iCloud Drive / Dateien.",
+    volumeProgress:"Volumen-Entwicklung", latestVolume:"Letztes Volumen", bestVolume:"Bestes Volumen", averageVolume:"Durchschnitt", noProgressData:"Logge diese Übung mindestens einmal, um den Fortschritt hier zu sehen.", shown:"angezeigt", condensed:"verdichtet",
     pleaseChoose:"Bitte wähle zuerst eine Übung.", pleaseSet:"Bitte trage mindestens einen gültigen Satz mit Gewicht und Wiederholungen ein.",
     deleteExercisesConfirm:"Möchtest du wirklich alle Übungen löschen? Das kann nicht rückgängig gemacht werden.",
     deleteDaysConfirm:"Möchtest du wirklich alle gespeicherten Tagesnamen löschen? Das kann nicht rückgängig gemacht werden.",
@@ -831,7 +833,7 @@ const DEFAULT_DEVICES = [
   { id:"default-seitenheben-kabelzug", name:"Cable Lateral Raise", muscle:"Shoulders", exerciseType:"complement", photo:"images/exercises/Seitenheben_kabelzug.png", days:["Push Day","Whole Body","Shoulders"] },
   { id:"default-schulterdruecken-vorne-kh", name:"Front Dumbbell Shoulder Press", muscle:"Shoulders", exerciseType:"complement", tracking:"perSide", photo:"images/exercises/schulterheben_vorne.png", days:["Push Day","Whole Body","Arms","Shoulders"] },
   { id:"default-trizeps-kh", name:"Dumbbell Triceps Extension", muscle:"Triceps", exerciseType:"complement", tracking:"perSide", photo:"images/exercises/trizeps_kh.png", days:["Push Day","Whole Body","Arms"] },
-  { id:"default-klimmzuege", name:"Pull-Up", muscle:"Back", exerciseType:"basic", photo:"images/exercises/Klimmzüge.png", days:["Pull Day","Whole Body","Back"] },
+  { id:"default-klimmzuege", name:"Pull-Up", muscle:"Back", exerciseType:"basic", photo:"images/exercises/klimmzüge.png", days:["Pull Day","Whole Body","Back"] },
   { id:"default-latzug-kabel", name:"Cable Lat Pulldown", muscle:"Back", exerciseType:"basic", photo:"images/exercises/Latzug_kabel.png", days:["Pull Day","Whole Body","Back"] },
   { id:"default-latzug-machine", name:"Machine Lat Pulldown", muscle:"Back", exerciseType:"basic", photo:"images/exercises/latzug_machine.png", days:["Pull Day","Whole Body","Back"] },
   { id:"default-rudern-kabelzug", name:"Cable Row", muscle:"Back", exerciseType:"basic", photo:"images/exercises/rudern_kabelzug.png", days:["Pull Day","Whole Body","Back"] },
@@ -861,6 +863,8 @@ const DEFAULT_DEVICES = [
   { id:"default-back-extension", name:"Back Extension", muscle:"Back", exerciseType:"complement", photo:"images/exercises/rücken_extention.png", days:DEFAULT_DAYS },
   { id:"default-crunch", name:"Crunch", muscle:"Abs/Core", exerciseType:"complement", photo:"images/exercises/crunch.png", days:DEFAULT_DAYS },
   { id:"default-crunch-machine", name:"Machine Crunch", muscle:"Abs/Core", exerciseType:"complement", photo:"images/exercises/crunch_machine.png", days:DEFAULT_DAYS },
+  { id:"default-cable-side-bend", name:"Cable Side Bend", muscle:"Abs/Core", exerciseType:"complement", photo:"images/exercises/Cable Side Bend.png", days:DEFAULT_DAYS },
+  { id:"default-cable-woodchop", name:"Cable Woodchop", muscle:"Abs/Core", exerciseType:"complement", photo:"images/exercises/cable_woodchop.png", days:DEFAULT_DAYS },
   { id:"default-situps-bank", name:"Sit-Ups Bench", muscle:"Abs/Core", exerciseType:"complement", photo:"images/exercises/situps_bank.png", days:["Push Day","Pull Day","Leg Day","Whole Body"] },
   { id:"default-plank", name:"Plank", muscle:"Abs/Core", exerciseType:"complement", photo:"images/exercises/plank.png", days:DEFAULT_DAYS },
 ];
@@ -917,6 +921,8 @@ const DEFAULT_DEVICE_DE = {
   "default-back-extension": { name:"Rückenextension", muscle:"Rücken" },
   "default-crunch": { name:"Crunch", muscle:"Bauch/Core" },
   "default-crunch-machine": { name:"Crunch Maschine", muscle:"Bauch/Core" },
+  "default-cable-side-bend": { name:"Cable Side Bend", muscle:"Bauch/Core" },
+  "default-cable-woodchop": { name:"Cable Woodchop", muscle:"Bauch/Core" },
   "default-situps-bank": { name:"Situps Bank", muscle:"Bauch/Core" },
   "default-plank": { name:"Plank", muscle:"Bauch/Core" },
 };
@@ -1173,6 +1179,122 @@ function PressableImage({ src, alt = "", style = {}, previewStyle = {} }) {
           style={{maxWidth:"100%",maxHeight:"86vh",borderRadius:16,objectFit:"contain",boxShadow:"0 22px 70px rgba(0,0,0,0.65)",...previewStyle}} />
       </div>}
     </>
+  );
+}
+
+function ExerciseVolumeProgress({ logs = [], language = "en" }) {
+  const [range, setRange] = useState("all");
+  const allPoints = [...logs]
+    .sort((a,b)=>new Date(a.date)-new Date(b.date))
+    .map(log => ({ log, stats:setStats(log.sets || []) }));
+  const rangeOptions = [
+    {key:"1m", label:"1M", days:31},
+    {key:"3m", label:"3M", days:93},
+    {key:"6m", label:"6M", days:186},
+    {key:"1y", label:language==="de"?"1J":"1Y", days:366},
+    {key:"all", label:language==="de"?"Alle":"All", days:null},
+  ];
+  const newestDate = allPoints.length ? new Date(allPoints[allPoints.length - 1].log.date) : null;
+  const cutoff = newestDate && range !== "all"
+    ? new Date(newestDate.getTime() - (rangeOptions.find(o=>o.key===range)?.days || 0) * 86400000)
+    : null;
+  const points = cutoff ? allPoints.filter(p => new Date(p.log.date) >= cutoff) : allPoints;
+  const bucketKey = (date, mode) => {
+    const d = new Date(date);
+    if (mode === "month") return d.toISOString().slice(0,7);
+    const monday = new Date(d);
+    monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    return monday.toISOString().slice(0,10);
+  };
+  const compactPoints = (source) => {
+    if (source.length <= 48) return {points:source, mode:null};
+    const mode = source.length > 120 || range === "all" ? "month" : "week";
+    const grouped = source.reduce((acc, point) => {
+      const key = bucketKey(point.log.date, mode);
+      const current = acc[key];
+      if (!current || point.stats.totalVolume >= current.stats.totalVolume) acc[key] = point;
+      return acc;
+    }, {});
+    const compacted = Object.values(grouped).sort((a,b)=>new Date(a.log.date)-new Date(b.log.date));
+    return {points:compacted.length >= 2 ? compacted : source, mode:compacted.length >= 2 ? mode : null};
+  };
+  const compacted = compactPoints(points);
+  const chartPoints = compacted.points;
+  const volumes = points.map(p => p.stats.totalVolume);
+  const latest = volumes.length ? volumes[volumes.length - 1] : 0;
+  const best = volumes.length ? Math.max(...volumes) : 0;
+  const average = volumes.length ? volumes.reduce((sum, v) => sum + v, 0) / volumes.length : 0;
+  const maxVolume = Math.max(1, best);
+  const width = 320;
+  const height = 160;
+  const pad = 26;
+  const chartWidth = width - pad * 2;
+  const chartHeight = height - pad * 2;
+  const xy = (volume, index) => {
+    const x = chartPoints.length <= 1 ? width / 2 : pad + (index * chartWidth) / (chartPoints.length - 1);
+    const y = height - pad - (volume / maxVolume) * chartHeight;
+    return {x,y};
+  };
+  const line = chartPoints.map((p,i) => {
+    const {x,y} = xy(p.stats.totalVolume, i);
+    return `${x},${y}`;
+  }).join(" ");
+
+  return (
+    <div style={{...S.block,marginBottom:14,padding:14}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:10}}>
+        <div style={{fontSize:15,fontWeight:900,color:"#f8fafc"}}>{t(language,"volumeProgress")}</div>
+        <div style={{fontSize:12,color:"#64748b"}}>{points.length}/{allPoints.length} {t(language,"shown")}</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:6,marginBottom:10}}>
+        {rangeOptions.map(option=>(
+          <button key={option.key} style={{border:"none",borderRadius:8,padding:"8px 4px",fontSize:12,fontWeight:900,cursor:"pointer",
+            background:range===option.key?"#1d4ed8":"#0f172a",color:range===option.key?"#fff":"#94a3b8",fontFamily:"inherit"}}
+            onClick={()=>setRange(option.key)}>
+            {option.label}
+          </button>
+        ))}
+      </div>
+      {points.length === 0 ? (
+        <div style={{color:"#64748b",fontSize:13,lineHeight:1.5,padding:"18px 4px"}}>{t(language,"noProgressData")}</div>
+      ) : (
+        <>
+          <svg viewBox={`0 0 ${width} ${height}`} style={{width:"100%",height:170,display:"block",background:"#020617",border:"1px solid #1e293b",borderRadius:12}}>
+            <line x1={pad} y1={height-pad} x2={width-pad} y2={height-pad} stroke="#334155" strokeWidth="1" />
+            <line x1={pad} y1={pad} x2={pad} y2={height-pad} stroke="#334155" strokeWidth="1" />
+            {[0.25,0.5,0.75,1].map(r=>(
+              <line key={r} x1={pad} y1={height-pad-(r*chartHeight)} x2={width-pad} y2={height-pad-(r*chartHeight)} stroke="#1e293b" strokeWidth="1" />
+            ))}
+            {chartPoints.length > 1 && <polyline points={line} fill="none" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />}
+            {chartPoints.map((p,i)=>{
+              const {x,y} = xy(p.stats.totalVolume, i);
+              const isLast = i === chartPoints.length - 1;
+              return <g key={p.log.id || i}>
+                <circle cx={x} cy={y} r={isLast?5:4} fill={isLast?"#60a5fa":"#22c55e"} />
+                <title>{`${formatDate(p.log.date)} · ${Math.round(p.stats.totalVolume)} kg`}</title>
+              </g>;
+            })}
+            <text x={pad} y={18} fill="#94a3b8" fontSize="10">{Math.round(maxVolume)} kg</text>
+            <text x={pad} y={height-8} fill="#64748b" fontSize="10">0 kg</text>
+          </svg>
+          {compacted.mode && <div style={{fontSize:11,color:"#64748b",marginTop:7}}>
+            {t(language,"condensed")}: {compacted.mode === "month" ? t(language,"month") : language==="de"?"Woche":"Week"}
+          </div>}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,marginTop:10}}>
+            {[
+              {label:t(language,"latestVolume"), value:latest, color:"#60a5fa"},
+              {label:t(language,"bestVolume"), value:best, color:"#22c55e"},
+              {label:t(language,"averageVolume"), value:average, color:"#f59e0b"},
+            ].map(item=>(
+              <div key={item.label} style={{background:"#0f172a",border:"1px solid #334155",borderRadius:10,padding:"10px 8px",minWidth:0}}>
+                <div style={{fontSize:16,fontWeight:900,color:item.color,whiteSpace:"nowrap"}}>{Math.round(item.value)}kg</div>
+                <div style={{fontSize:10,color:"#64748b",marginTop:3,overflowWrap:"anywhere"}}>{item.label}</div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -1887,13 +2009,17 @@ function SessionScreen({ session, setSession, devices, setDevices, groupPhotos, 
 // ═══════════════════════════════════════════════════════════════
 // DEVICES SCREEN
 // ═══════════════════════════════════════════════════════════════
-function DevicesScreen({ devices, setDevices, groupPhotos, setGroupPhotos, onRequestDeleteAll, language }) {
+function DevicesScreen({ devices, setDevices, logs = [], groupPhotos, setGroupPhotos, onRequestDeleteAll, language }) {
   const [mode, setMode] = useState(null);
   const [openGroup, setOpenGroup] = useState(null);
+  const [openDeviceId, setOpenDeviceId] = useState(null);
   const [editingGroupPhoto, setEditingGroupPhoto] = useState(false);
   const groups = getMuscleGroups(devices, groupPhotos);
   const currentGroup = openGroup ? groups.find(g => g.key === openGroup) : null;
   const currentDevices = openGroup ? devices.filter(d => groupKey(d.muscle) === openGroup) : [];
+  const openedDevice = devices.find(d => d.id === openDeviceId);
+  const openedDeviceLogs = [...logs].filter(l => l.deviceId === openDeviceId)
+    .sort((a,b)=>new Date(b.date)-new Date(a.date));
 
   const handleSave = data => {
     if (mode==="add") setDevices(prev=>[...prev,{id:uid(),...data}]);
@@ -1906,6 +2032,47 @@ function DevicesScreen({ devices, setDevices, groupPhotos, setGroupPhotos, onReq
     setGroupPhotos(prev => ({...prev, [openGroup]: photo}));
     setEditingGroupPhoto(false);
   };
+
+  if (openedDevice) return (
+    <div style={S.screen}>
+      <button style={S.backBtn} onClick={()=>setOpenDeviceId(null)}>
+        <Icon d={Icons.back} size={18} /> {currentGroup ? t(language,"backToGroups") : "Back"}
+      </button>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
+        {openedDevice.photo?<PressableImage src={openedDevice.photo} alt={openedDevice.name} style={{width:74,height:74,borderRadius:12,objectFit:"cover",flexShrink:0}} />
+          :<div style={{width:74,height:74,borderRadius:12,background:"#0f172a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <Icon d={Icons.dumbbell} size={28} color="#475569" /></div>}
+        <div style={{minWidth:0,flex:1}}>
+          <h2 style={{...S.title,margin:"0 0 6px",fontSize:22,overflowWrap:"anywhere"}}>{openedDevice.name}</h2>
+          <div style={{fontSize:12,color:"#94a3b8",marginBottom:5}}>{groupName(openedDevice.muscle)}</div>
+          <span style={{...S.typeBadge,background:openedDevice.exerciseType==="basic"?"#1e3a8a":"#334155",color:openedDevice.exerciseType==="basic"?"#bfdbfe":"#cbd5e1"}}>
+            {exerciseTypeLabel(openedDevice.exerciseType, language)}
+          </span>
+        </div>
+        <button style={S.iconBtn} onClick={()=>setMode(openedDevice)}><Icon d={Icons.edit} size={18} color="#60a5fa" /></button>
+      </div>
+
+      {mode && <DeviceForm language={language} initial={mode==="add"?null:mode} onSave={handleSave} onCancel={()=>setMode(null)} />}
+
+      <ExerciseVolumeProgress logs={openedDeviceLogs} language={language} />
+
+      {openedDeviceLogs.length===0&&<div style={S.empty}>{t(language,"noSessionsExercise")}</div>}
+      {openedDeviceLogs.map(log=>(
+        <div key={log.id} style={S.block}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:8}}>
+            <div>
+              <div style={{fontWeight:700,color:"#f1f5f9"}}>{displayDayName(log.dayName, language)}</div>
+              <div style={{color:"#64748b",fontSize:12}}>{formatDate(log.date)}</div>
+            </div>
+            <div style={{color:"#22c55e",fontSize:13,fontWeight:900,whiteSpace:"nowrap"}}>{Math.round(setStats(log.sets || []).totalVolume)}kg</div>
+          </div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {(log.sets || []).map((s,i)=><span key={i} style={S.pill}>{formatSetSummary(s, language)}</span>)}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 
   if (openGroup && currentGroup) return (
     <div style={S.screen}>
@@ -1936,7 +2103,10 @@ function DevicesScreen({ devices, setDevices, groupPhotos, setGroupPhotos, onReq
       {currentDevices.length===0&&<div style={S.empty}>{t(language,"noExercisesGroup")}</div>}
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         {currentDevices.map(d=>(
-          <div key={d.id} style={S.card}>
+          <div key={d.id} role="button" tabIndex={0}
+            style={{...S.card,width:"100%",boxSizing:"border-box",cursor:"pointer",textAlign:"left",fontFamily:"inherit",color:"inherit"}}
+            onClick={()=>setOpenDeviceId(d.id)}
+            onKeyDown={e=>{if(e.key==="Enter"||e.key===" ")setOpenDeviceId(d.id);}}>
             {d.photo?<PressableImage src={d.photo} alt={d.name} style={S.thumb} />
               :<div style={S.thumbPh}><Icon d={Icons.dumbbell} size={26} color="#475569" /></div>}
             <div style={{flex:1}}>
@@ -1948,8 +2118,8 @@ function DevicesScreen({ devices, setDevices, groupPhotos, setGroupPhotos, onReq
                 </span>
               </div>
             </div>
-            <button style={S.iconBtn} onClick={()=>setMode(d)}><Icon d={Icons.edit} size={17} color="#60a5fa" /></button>
-            <button style={S.iconBtn} onClick={()=>setDevices(prev=>prev.filter(x=>x.id!==d.id))}><Icon d={Icons.trash} size={17} color="#ef4444" /></button>
+            <button style={S.iconBtn} onClick={e=>{e.stopPropagation();setMode(d);}}><Icon d={Icons.edit} size={17} color="#60a5fa" /></button>
+            <button style={S.iconBtn} onClick={e=>{e.stopPropagation();setDevices(prev=>prev.filter(x=>x.id!==d.id));}}><Icon d={Icons.trash} size={17} color="#ef4444" /></button>
           </div>
         ))}
       </div>
@@ -2176,6 +2346,7 @@ function HistoryScreen({ logs, devices, setLogs, onRequestDeleteAll, onResumeSes
       <button style={S.backBtn} onClick={()=>setOpenDeviceId(null)}><Icon d={Icons.back} size={18} /> Back</button>
       <h2 style={S.title}>{openedDevice.name}</h2>
       <div style={{color:"#94a3b8",fontSize:13,marginBottom:16}}>{openedDevice.muscle}</div>
+      <ExerciseVolumeProgress logs={devLogs} language={language} />
       {devLogs.length===0&&<div style={S.empty}>{t(language,"noSessionsExercise")}</div>}
       {devLogs.map(log=>(
         <div key={log.id} style={S.block}>
@@ -2797,6 +2968,7 @@ function App() {
           onStart={setActiveSession}
           onRequestDeleteDays={()=>requestConfirm(t(language,"deleteDaysConfirm"),()=>setDayTemplates([]))} />}
       {tab==="devices"  && <DevicesScreen devices={devices} setDevices={setDevices}
+          logs={logs}
           language={language}
           groupPhotos={groupPhotos} setGroupPhotos={setGroupPhotos}
           onRequestDeleteAll={()=>requestConfirm(t(language,"deleteExercisesConfirm"),()=>setDevices([]))} />}

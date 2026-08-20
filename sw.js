@@ -1,5 +1,5 @@
 // Iron Log Service Worker - Offline Cache
-const CACHE_NAME = 'ironlog-v16';
+const CACHE_NAME = 'ironlog-v19';
 const URLS_TO_CACHE = [
   './',
   './index.html',
